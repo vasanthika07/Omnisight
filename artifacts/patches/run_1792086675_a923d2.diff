@@ -1,0 +1,14 @@
+--- a/test-app/checkout.css
++++ b/test-app/checkout.css
+@@ -307,8 +307,9 @@
+    ========================================================================== */
+ .checkout-action-btn {
+   /* BUGGY_LINE_START */
+-  width: 520px !important;
+-  max-width: none !important;
++  width: 100% !important;
++  max-width: 100% !important;
++  box-sizing: border-box !important;
+   /* BUGGY_LINE_END */
+   padding: 16px 24px;
+   background: var(--accent-gradient);

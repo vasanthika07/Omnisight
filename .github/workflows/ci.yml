@@ -1,0 +1,53 @@
+name: OmniSight Autonomous Visual QA & Self-Healing Pipeline
+
+on:
+  push:
+    branches: [ staging, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  omnisight-visual-audit:
+    name: Headless Multimodal Audit & Self-Healing
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Install Playwright Chromium
+        run: |
+          playwright install --with-deps chromium
+
+      - name: Dispatch Staging Build Webhook to OmniSight Gateway
+        run: |
+          python -c "
+          from backend.agents.orchestrator import AgenticOrchestrator
+          orchestrator = AgenticOrchestrator(headless=True)
+          result = orchestrator.run_self_healing_cycle(viewport_key='mobile')
+          print('OmniSight Result:', result['status'])
+          assert result['verification_passed'], 'Visual verification failed!'
+          "
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Visual Proof Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnisight-visual-proof
+          path: artifacts/screenshots/

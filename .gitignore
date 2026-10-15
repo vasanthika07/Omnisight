@@ -1,0 +1,28 @@
+# Virtual Environment
+.venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+*.db
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Environment variables
+.env
+
+# Playwright
+test-results/
+playwright-report/
+
+# OS
+Thumbs.db
+.DS_Store

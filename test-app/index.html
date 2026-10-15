@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infotact Store - Secure Checkout (OmniSight Demo)</title>
+  <link rel="stylesheet" href="checkout.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="checkout-wrapper">
+    <!-- Header -->
+    <header class="checkout-header">
+      <div class="brand">
+        <div class="brand-logo">OS</div>
+        <div class="brand-info">
+          <h1>OmniStore</h1>
+          <span class="badge">Staging v2.4.1</span>
+        </div>
+      </div>
+      <div class="security-indicator">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <span>256-Bit Encrypted</span>
+      </div>
+    </header>
+
+    <!-- Main Checkout Container -->
+    <main class="checkout-grid">
+      <!-- Left Column: Shipping & Payment -->
+      <section class="checkout-form-section">
+        <div class="progress-steps">
+          <div class="step completed">1. Cart</div>
+          <div class="step active">2. Shipping</div>
+          <div class="step">3. Payment</div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">Shipping Address</h2>
+          <div class="form-row">
+            <div class="input-group">
+              <label for="first-name">First Name</label>
+              <input id="first-name" type="text" value="Alex" readonly>
+            </div>
+            <div class="input-group">
+              <label for="last-name">Last Name</label>
+              <input id="last-name" type="text" value="Mercer" readonly>
+            </div>
+          </div>
+          <div class="input-group full">
+            <label for="address">Street Address</label>
+            <input id="address" type="text" value="742 Evergreen Terrace, Staging Bay" readonly>
+          </div>
+          <div class="form-row">
+            <div class="input-group">
+              <label for="city">City</label>
+              <input id="city" type="text" value="Bengaluru" readonly>
+            </div>
+            <div class="input-group">
+              <label for="zipcode">Postal Code</label>
+              <input id="zipcode" type="text" value="560100" readonly>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="section-title">Payment Method</h2>
+          <div class="payment-methods">
+            <label class="payment-card selected">
+              <input type="radio" name="payment" checked>
+              <div class="payment-details">
+                <span class="card-title">Corporate Visa Ending in 4242</span>
+                <span class="card-expiry">Expires 10/28</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Order Summary & Action -->
+      <aside class="checkout-summary-section">
+        <div class="card summary-card">
+          <h2 class="section-title">Order Summary</h2>
+          <div class="items-list">
+            <div class="summary-item">
+              <div class="item-img">🤖</div>
+              <div class="item-info">
+                <p class="item-name">Autonomous RPA Core Pro</p>
+                <p class="item-sub">Quarterly Developer License</p>
+              </div>
+              <span class="item-price">$899.00</span>
+            </div>
+            <div class="summary-item">
+              <div class="item-img">👁️</div>
+              <div class="item-info">
+                <p class="item-name">Multimodal Vision Addon</p>
+                <p class="item-sub">VLM Inspection Engine</p>
+              </div>
+              <span class="item-price">$100.00</span>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="calc-row">
+            <span>Subtotal</span>
+            <span>$999.00</span>
+          </div>
+          <div class="calc-row">
+            <span>Priority Staging QA</span>
+            <span class="free-tag">FREE</span>
+          </div>
+          <div class="calc-row total-row">
+            <span>Total Amount</span>
+            <span class="total-price">$999.00</span>
+          </div>
+
+          <!-- The deliberate UI anomaly target container -->
+          <div class="checkout-action-box" id="checkout-action-box">
+            <button id="checkout-btn" class="checkout-action-btn">
+              <span>Complete Purchase • $999.00</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M5 12h14"></path>
+                <path d="M12 5l7 7-7 7"></path>
+              </svg>
+            </button>
+            <p class="guarantee-text">🔒 30-day money-back guarantee with zero risk</p>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="checkout-footer">
+      <p>© 2026 Infotact Systems. OmniSight Multimodal UI Self-Healing Test Harness.</p>
+    </footer>
+  </div>
+
+  <script src="checkout.js"></script>
+</body>
+</html>
