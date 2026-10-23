@@ -8,7 +8,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.sqlite3
+*.sqlite
 *.db
+
+# Runtime Artifacts (keep sample screenshots if any, ignore run-specific outputs)
+artifacts/screenshots/run_*
+artifacts/patches/run_*
 
 # Node
 node_modules/

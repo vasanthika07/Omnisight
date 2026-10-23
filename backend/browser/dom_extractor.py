@@ -17,10 +17,14 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
         ];
         
         const elementsInfo = [];
+        const visitedElements = new Set();
         
         candidateSelectors.forEach(sel => {
             const els = document.querySelectorAll(sel);
             els.forEach(el => {
+                if (visitedElements.has(el)) return;
+                visitedElements.add(el);
+                
                 const rect = el.getBoundingClientRect();
                 const computed = window.getComputedStyle(el);
                 

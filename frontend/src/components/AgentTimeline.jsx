@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, CheckCircle2, AlertCircle, Clock, ArrowRight } from 'lucide-react';
+import { Activity, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
 export default function AgentTimeline({ timeline = [], isRunning }) {
   if (!timeline || timeline.length === 0) {

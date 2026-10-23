@@ -28,9 +28,28 @@ def init_db():
         verification_passed INTEGER DEFAULT 0,
         pr_number INTEGER,
         pr_url TEXT,
-        summary TEXT
+        summary TEXT,
+        timeline TEXT,
+        crop_screenshot TEXT,
+        engine_used TEXT,
+        confidence_score REAL
     )
     """)
+
+    # Migration check: add new columns if they do not exist
+    cursor.execute("PRAGMA table_info(audit_runs)")
+    existing_cols = {row["name"] for row in cursor.fetchall()}
+    for col_name, col_type in [
+        ("timeline", "TEXT"),
+        ("crop_screenshot", "TEXT"),
+        ("engine_used", "TEXT"),
+        ("confidence_score", "REAL")
+    ]:
+        if col_name not in existing_cols:
+            try:
+                cursor.execute(f"ALTER TABLE audit_runs ADD COLUMN {col_name} {col_type}")
+            except Exception:
+                pass
     
     # Defects Table
     cursor.execute("""
@@ -68,12 +87,18 @@ def init_db():
 def save_audit_run(run_data: Dict[str, Any]) -> str:
     conn = get_connection()
     cursor = conn.cursor()
+
+    timeline_json = json.dumps(run_data.get("timeline", [])) if run_data.get("timeline") is not None else "[]"
+    crop_img = run_data.get("crop_screenshot") or run_data.get("cropped_defect_token_artifact")
+    engine = run_data.get("engine_used", "")
+    confidence = run_data.get("confidence_score")
+
     cursor.execute("""
     INSERT OR REPLACE INTO audit_runs (
         id, created_at, status, viewport, before_screenshot, after_screenshot,
         diff_screenshot, defects_found, fix_applied, verification_passed,
-        pr_number, pr_url, summary
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        pr_number, pr_url, summary, timeline, crop_screenshot, engine_used, confidence_score
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         run_data["id"],
         run_data.get("created_at", datetime.now().isoformat()),
@@ -87,7 +112,11 @@ def save_audit_run(run_data: Dict[str, Any]) -> str:
         1 if run_data.get("verification_passed") else 0,
         run_data.get("pr_number"),
         run_data.get("pr_url"),
-        run_data.get("summary", "")
+        run_data.get("summary", ""),
+        timeline_json,
+        crop_img,
+        engine,
+        confidence
     ))
     
     # Save defects
@@ -127,25 +156,35 @@ def save_audit_run(run_data: Dict[str, Any]) -> str:
     conn.close()
     return run_data["id"]
 
+def _hydrate_run_dict(cursor, run_row) -> Dict[str, Any]:
+    run_dict = dict(run_row)
+    # Timeline
+    try:
+        run_dict["timeline"] = json.loads(run_dict["timeline"]) if run_dict.get("timeline") else []
+    except Exception:
+        run_dict["timeline"] = []
+    
+    # Expose crop screenshot alias
+    run_dict["cropped_defect_token_artifact"] = run_dict.get("crop_screenshot")
+
+    # Fetch defects for this run
+    cursor.execute("SELECT * FROM defects WHERE run_id = ?", (run_dict["id"],))
+    run_dict["defects"] = [
+        {**dict(d), "bounding_box": json.loads(d["bounding_box"]) if d["bounding_box"] else {}}
+        for d in cursor.fetchall()
+    ]
+    # Fetch patch
+    cursor.execute("SELECT * FROM patches WHERE run_id = ?", (run_dict["id"],))
+    p = cursor.fetchone()
+    run_dict["patch"] = dict(p) if p else None
+    return run_dict
+
 def get_recent_runs(limit: int = 20) -> List[Dict[str, Any]]:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM audit_runs ORDER BY created_at DESC LIMIT ?", (limit,))
     rows = cursor.fetchall()
-    runs = []
-    for r in rows:
-        run_dict = dict(r)
-        # Fetch defects for this run
-        cursor.execute("SELECT * FROM defects WHERE run_id = ?", (run_dict["id"],))
-        run_dict["defects"] = [
-            {**dict(d), "bounding_box": json.loads(d["bounding_box"]) if d["bounding_box"] else {}}
-            for d in cursor.fetchall()
-        ]
-        # Fetch patch
-        cursor.execute("SELECT * FROM patches WHERE run_id = ?", (run_dict["id"],))
-        p = cursor.fetchone()
-        run_dict["patch"] = dict(p) if p else None
-        runs.append(run_dict)
+    runs = [_hydrate_run_dict(cursor, r) for r in rows]
     conn.close()
     return runs
 
@@ -157,15 +196,7 @@ def get_run_by_id(run_id: str) -> Optional[Dict[str, Any]]:
     if not row:
         conn.close()
         return None
-    run_dict = dict(row)
-    cursor.execute("SELECT * FROM defects WHERE run_id = ?", (run_id,))
-    run_dict["defects"] = [
-        {**dict(d), "bounding_box": json.loads(d["bounding_box"]) if d["bounding_box"] else {}}
-        for d in cursor.fetchall()
-    ]
-    cursor.execute("SELECT * FROM patches WHERE run_id = ?", (run_id,))
-    p = cursor.fetchone()
-    run_dict["patch"] = dict(p) if p else None
+    run_dict = _hydrate_run_dict(cursor, row)
     conn.close()
     return run_dict
 

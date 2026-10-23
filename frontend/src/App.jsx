@@ -6,7 +6,7 @@ import AgentTimeline from './components/AgentTimeline';
 import DefectCard from './components/DefectCard';
 import PatchViewer from './components/PatchViewer';
 import PRModal from './components/PRModal';
-import { History, Shield, Sparkles, CheckCircle2 } from 'lucide-react';
+import { History, Sparkles } from 'lucide-react';
 
 const BACKEND_URL = 'http://127.0.0.1:8000';
 
@@ -20,18 +20,6 @@ export default function App() {
   const [isPRModalOpen, setIsPRModalOpen] = useState(false);
   const [bannerNotice, setBannerNotice] = useState(null);
 
-  // Load system info and recent history on mount
-  useEffect(() => {
-    fetch(`${BACKEND_URL}/`)
-      .then((res) => res.json())
-      .then((data) => {
-        setEngineInfo(`VLM: ${data.vlm_provider_configured.toUpperCase()}`);
-      })
-      .catch(() => setEngineInfo('VLM: Autonomous Spatial Engine'));
-
-    fetchHistory();
-  }, []);
-
   const fetchHistory = async () => {
     try {
       const res = await fetch(`${BACKEND_URL}/api/history`);
@@ -44,6 +32,19 @@ export default function App() {
       console.warn('Could not fetch history:', e);
     }
   };
+
+  // Load system info and recent history on mount
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/`)
+      .then((res) => res.json())
+      .then((data) => {
+        setEngineInfo(`VLM: ${data.vlm_provider_configured.toUpperCase()}`);
+      })
+      .catch(() => setEngineInfo('VLM: Autonomous Spatial Engine'));
+
+    fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const showBanner = (msg) => {
     setBannerNotice(msg);
@@ -95,6 +96,10 @@ export default function App() {
       })
     });
     const data = await res.json();
+    if (data.success) {
+      setCurrentRun(prev => prev ? { ...prev, pr_number: data.pr_number, pr_url: data.pr_url } : prev);
+      showBanner(`PR #${data.pr_number || 42} created: ${data.message || 'Pull request prepared successfully.'}`);
+    }
     fetchHistory();
     return data;
   };
@@ -144,6 +149,8 @@ export default function App() {
 
             <PatchViewer 
               patch={currentRun?.patch} 
+              prNumber={currentRun?.pr_number}
+              prUrl={currentRun?.pr_url}
               onOpenPRModal={() => setIsPRModalOpen(true)}
               canOpenPR={currentRun?.verification_passed}
             />
@@ -158,7 +165,10 @@ export default function App() {
 
             <DefectCard 
               defects={currentRun?.defects} 
-              confidenceScore={currentRun?.timeline?.find(t => t.step === 'defect_detection')?.details?.confidence}
+              confidenceScore={currentRun?.confidence_score ?? currentRun?.timeline?.find(t => t.step === 'defect_detection')?.details?.confidence}
+              croppedArtifact={currentRun?.cropped_defect_token_artifact || currentRun?.crop_screenshot}
+              engineUsed={currentRun?.engine_used}
+              backendUrl={BACKEND_URL}
             />
 
             {/* Recent Audit History List */}
@@ -208,6 +218,7 @@ export default function App() {
       </main>
 
       <PRModal 
+        key={currentRun?.id || 'none'}
         isOpen={isPRModalOpen}
         onClose={() => setIsPRModalOpen(false)}
         runData={currentRun}

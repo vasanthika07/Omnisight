@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { GitPullRequest, Code2, Copy, Check, GitCommit } from 'lucide-react';
+import { GitPullRequest, Code2, Copy, Check } from 'lucide-react';
 
-export default function PatchViewer({ patch, onOpenPRModal, canOpenPR = true }) {
+export default function PatchViewer({ patch, onOpenPRModal, canOpenPR = true, prNumber, prUrl }) {
   const [copied, setCopied] = useState(false);
 
   if (!patch || !patch.unified_diff) {
@@ -50,7 +50,25 @@ export default function PatchViewer({ patch, onOpenPRModal, canOpenPR = true }) 
             <span>{copied ? 'Copied!' : 'Copy Diff'}</span>
           </button>
 
-          {canOpenPR && (
+          {prUrl ? (
+            <a 
+              href={prUrl} 
+              target="_blank" 
+              rel="noreferrer"
+              className="btn btn-secondary" 
+              style={{ 
+                padding: '6px 14px', 
+                fontSize: '0.78rem',
+                color: '#34d399',
+                borderColor: 'rgba(16, 185, 129, 0.4)',
+                background: 'rgba(16, 185, 129, 0.12)',
+                textDecoration: 'none'
+              }}
+            >
+              <Check size={14} color="#10b981" />
+              <span>PR #{prNumber || 42} Dispatched</span>
+            </a>
+          ) : canOpenPR && (
             <button 
               className="btn btn-success" 
               onClick={onOpenPRModal}

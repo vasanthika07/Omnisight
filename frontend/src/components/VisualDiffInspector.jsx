@@ -45,7 +45,7 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
           <Layers size={18} color="#6366f1" />
           <h2>Visual Diff & Evidence Inspector</h2>
           <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-            ({runData.viewport.toUpperCase()} • {runData.verification_passed ? 'HEALED' : 'UNVERIFIED'})
+            ({runData.viewport.toUpperCase()} • {runData.defects_found === 0 ? 'PASSED (ZERO DEFECTS)' : (runData.verification_passed ? 'HEALED & VERIFIED' : 'UNVERIFIED')})
           </span>
         </div>
 
@@ -185,9 +185,20 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
         )}
 
         {!afterUrl && (
-          <div className="side-frame" style={{ padding: '20px' }}>
-            <span className="side-label label-before">STAGING VIEWPORT SCREENSHOT</span>
-            <img src={beforeUrl} alt="Viewport Screenshot" style={{ maxWidth: '380px' }} />
+          <div className="side-frame" style={{ padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span className="side-label label-before">
+              {runData.defects_found === 0 ? 'AUDITED VIEWPORT (COMPLIANT)' : 'STAGING VIEWPORT SCREENSHOT'}
+            </span>
+            <img 
+              src={beforeUrl} 
+              alt="Viewport Screenshot" 
+              style={{ 
+                maxWidth: runData.viewport === 'desktop' ? '92%' : (runData.viewport === 'tablet' ? '70%' : '380px'),
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+              }} 
+            />
           </div>
         )}
       </div>

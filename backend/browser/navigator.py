@@ -96,18 +96,19 @@ class BrowserNavigator:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             context = browser.new_context(
-                viewport={"width": vp_config["width"], "height": vp_config["height"]}
+                viewport={"width": vp_config["width"], "height": vp_config["height"]},
+                user_agent="Mozilla/5.0 (OmniSight Multimodal QA Agent 1.0)"
             )
             page = context.new_page()
             page.goto(url, wait_until="networkidle")
             
             # Inject candidate CSS patch directly into document head
-            page.evaluate(f"""() => {{
+            page.evaluate("""(css) => {
                 const styleEl = document.createElement('style');
                 styleEl.id = 'omnisight-patch-injection';
-                styleEl.textContent = `{css_patch}`;
+                styleEl.textContent = css;
                 document.head.appendChild(styleEl);
-            }}""")
+            }""", css_patch)
             
             page.wait_for_timeout(300)
             

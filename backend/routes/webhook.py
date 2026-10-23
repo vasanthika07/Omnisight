@@ -55,6 +55,15 @@ def receive_ci_build_webhook(payload: CIWebhookPayload, background_tasks: Backgr
         "status_url": f"/webhook/jobs/{job_id}"
     }
 
+@router.get("/jobs")
+def list_ci_jobs(limit: int = 20):
+    """
+    Returns a list of all active and completed CI/CD webhook jobs.
+    """
+    jobs = list(active_jobs.values())
+    jobs.sort(key=lambda j: j.get("created_at", 0), reverse=True)
+    return {"total": len(jobs), "jobs": jobs[:limit]}
+
 @router.get("/jobs/{job_id}")
 def get_ci_job_status(job_id: str):
     """

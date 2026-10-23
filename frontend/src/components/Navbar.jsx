@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, ShieldCheck, RefreshCw, Play, Sparkles } from 'lucide-react';
+import { Eye, RefreshCw, Play } from 'lucide-react';
 
 export default function Navbar({ onResetBug, onTriggerAudit, isRunning, engineInfo }) {
   return (

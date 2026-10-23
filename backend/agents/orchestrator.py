@@ -81,6 +81,7 @@ class AgenticOrchestrator:
         )
 
         if not defects_found:
+            log_step("complete", f"Audit complete for {viewport_key}: 0 visual defects found. Page layout complies with responsive standards.", status="completed")
             result = {
                 "id": run_id,
                 "viewport": viewport_key,
@@ -90,7 +91,9 @@ class AgenticOrchestrator:
                 "fix_applied": False,
                 "verification_passed": True,
                 "before_screenshot": before_screenshot,
-                "summary": "No visual defects detected on target page.",
+                "engine_used": analysis.get("engine_used"),
+                "confidence_score": analysis.get("visual_confidence_score", 1.0),
+                "summary": f"No visual defects detected on target page ({viewport_key} viewport).",
                 "timeline": timeline
             }
             save_audit_run(result)
@@ -177,6 +180,8 @@ class AgenticOrchestrator:
             "unified_diff": patch_info.get("unified_diff") if patch_info else None
         }
 
+        log_step("complete", "OmniSight autonomous audit and self-healing cycle finished successfully.")
+
         run_record = {
             "id": run_id,
             "viewport": viewport_key,
@@ -188,6 +193,10 @@ class AgenticOrchestrator:
             "before_screenshot": before_screenshot,
             "after_screenshot": after_screenshot,
             "diff_screenshot": diff_screenshot,
+            "crop_screenshot": analysis.get("cropped_defect_token_artifact"),
+            "cropped_defect_token_artifact": analysis.get("cropped_defect_token_artifact"),
+            "engine_used": analysis.get("engine_used"),
+            "confidence_score": analysis.get("visual_confidence_score", 0.99),
             "summary": (
                 f"Autonomous self-healing completed: Repaired {primary_defect.get('element')} "
                 f"with responsive patch. Visual verification passed."
@@ -199,6 +208,5 @@ class AgenticOrchestrator:
 
         # Save to database
         save_audit_run(run_record)
-        log_step("complete", "OmniSight audit and self-healing cycle finished successfully.")
 
         return run_record

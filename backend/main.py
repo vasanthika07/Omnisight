@@ -48,9 +48,11 @@ def root():
             "docs": "/docs",
             "trigger_audit": "POST /api/audit",
             "audit_history": "GET /api/history",
+            "single_run": "GET /api/runs/{run_id}",
             "reset_bug": "POST /api/reset-bug",
             "approve_pr": "POST /api/approve-pr",
             "ci_webhook": "POST /webhook/build",
+            "ci_jobs": "GET /webhook/jobs",
             "test_store": "/test-app/index.html"
         }
     }
