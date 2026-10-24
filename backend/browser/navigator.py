@@ -13,6 +13,14 @@ class BrowserNavigator:
         index_file = TEST_APP_DIR / "index.html"
         return index_file.as_uri()
 
+    def normalize_url(self, target_url: Optional[str]) -> str:
+        if not target_url or not str(target_url).strip():
+            return self.get_default_test_app_url()
+        url = str(target_url).strip()
+        if not (url.startswith("http://") or url.startswith("https://") or url.startswith("file://")):
+            url = f"http://{url}"
+        return url
+
     def capture_viewport(
         self,
         viewport_key: str = "mobile",
@@ -23,7 +31,7 @@ class BrowserNavigator:
         """
         Navigates to the page at the given viewport, extracts DOM metrics, and saves screenshot.
         """
-        url = target_url or self.get_default_test_app_url()
+        url = self.normalize_url(target_url)
         vp_config = VIEWPORTS.get(viewport_key, VIEWPORTS["mobile"])
         
         screenshot_filename = f"{run_id}_{viewport_key}{suffix}.png"
@@ -87,7 +95,7 @@ class BrowserNavigator:
         """
         Applies a candidate CSS patch in real-time inside the browser DOM and captures the after-state.
         """
-        url = target_url or self.get_default_test_app_url()
+        url = self.normalize_url(target_url)
         vp_config = VIEWPORTS.get(viewport_key, VIEWPORTS["mobile"])
         
         after_filename = f"{run_id}_{viewport_key}_after.png"

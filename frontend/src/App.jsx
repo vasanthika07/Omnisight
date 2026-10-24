@@ -137,6 +137,8 @@ export default function App() {
           targetUrl={targetUrl}
           setTargetUrl={setTargetUrl}
           isRunning={isRunning}
+          onTriggerAudit={handleTriggerAudit}
+          onResetBug={handleResetBug}
         />
 
         <div className="dashboard-grid">
