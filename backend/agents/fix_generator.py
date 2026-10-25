@@ -1,12 +1,50 @@
 import difflib
 import re
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, List, Optional
 from backend.config import PATCHES_DIR, TEST_APP_DIR
+
+SCENARIOS = {
+    "overflow": {
+        "id": "overflow",
+        "name": "Mobile Viewport Clipping Anomaly",
+        "category": "Responsiveness",
+        "description": "520px fixed-width button clipping 375px mobile viewport boundary.",
+        "target": ".checkout-action-btn",
+        "severity": "CRITICAL"
+    },
+    "contrast": {
+        "id": "contrast",
+        "name": "Low Contrast Accessibility Violation",
+        "category": "WCAG 1.4.3 AA",
+        "description": "Dark gray text on dark background (#1e293b on #161b22, ratio 2.1:1).",
+        "target": ".guarantee-text",
+        "severity": "HIGH"
+    },
+    "touch_target": {
+        "id": "touch_target",
+        "name": "Sub-Standard Touch Target Size",
+        "category": "WCAG 2.5.5",
+        "description": "Checkout action button reduced to tiny 20px touch target.",
+        "target": ".checkout-action-btn",
+        "severity": "HIGH"
+    },
+    "zindex_overlap": {
+        "id": "zindex_overlap",
+        "name": "Floating Collision / Obscured CTA",
+        "category": "RPA Automation",
+        "description": "Floating promotional overlay blocking user checkout click target.",
+        "target": ".promo-floating-overlay",
+        "severity": "CRITICAL"
+    }
+}
 
 class FixGenerator:
     def __init__(self):
         self.css_file = TEST_APP_DIR / "checkout.css"
+
+    def list_scenarios(self) -> List[Dict[str, Any]]:
+        return list(SCENARIOS.values())
 
     def generate_css_patch(self, defect: Dict[str, Any]) -> str:
         """
@@ -17,7 +55,6 @@ class FixGenerator:
             "proposed_fix",
             "width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;"
         )
-        # Clean formatting
         clean_rules = "\n  ".join([r.strip() for r in proposed_rules.strip().split("\n") if r.strip()])
         patch_css = f"""{element} {{
   {clean_rules}
@@ -31,6 +68,7 @@ class FixGenerator:
     ) -> Dict[str, Any]:
         """
         Generates a standard Git unified diff patch for developer code review.
+        Dynamically applies targeted replacements based on the defect type.
         """
         if not self.css_file.exists():
             return {
@@ -38,26 +76,59 @@ class FixGenerator:
             }
 
         original_content = self.css_file.read_text(encoding="utf-8")
-        
-        # Regex replacement targeting the known buggy section
-        # Replace fixed 520px with responsive 100%
-        pattern = r"/\* BUGGY_LINE_START \*/[\s\S]*?/\* BUGGY_LINE_END \*/"
-        replacement = (
-            "/* BUGGY_LINE_START */\n"
-            "  width: 100% !important;\n"
-            "  max-width: 100% !important;\n"
-            "  box-sizing: border-box !important;\n"
-            "  /* BUGGY_LINE_END */"
-        )
-        
-        if re.search(pattern, original_content):
-            repaired_content = re.sub(pattern, replacement, original_content)
-        else:
-            # Fallback: append or replace width
-            repaired_content = original_content.replace(
-                "width: 520px !important;",
-                "width: 100% !important;\n  max-width: 100% !important;"
+        defect_type = defect.get("type", "viewport_overflow")
+        repaired_content = original_content
+
+        if defect_type == "viewport_overflow":
+            pattern = r"/\* BUGGY_LINE_START \*/[\s\S]*?/\* BUGGY_LINE_END \*/"
+            replacement = (
+                "/* BUGGY_LINE_START */\n"
+                "  width: 100% !important;\n"
+                "  max-width: 100% !important;\n"
+                "  box-sizing: border-box !important;\n"
+                "  /* BUGGY_LINE_END */"
             )
+            if re.search(pattern, original_content):
+                repaired_content = re.sub(pattern, replacement, original_content)
+            else:
+                repaired_content = original_content.replace(
+                    "width: 520px !important;",
+                    "width: 100% !important;\n  max-width: 100% !important;\n  box-sizing: border-box !important;"
+                )
+        elif defect_type == "element_obscured_overlap":
+            # Hide the blocker overlay or make it static
+            repaired_content = re.sub(
+                r"\.promo-floating-overlay\s*\{[^}]*\}",
+                ".promo-floating-overlay {\n  display: none !important;\n}",
+                original_content
+            )
+        elif defect_type == "touch_target_too_small":
+            pattern = r"/\* BUGGY_LINE_START \*/[\s\S]*?/\* BUGGY_LINE_END \*/"
+            replacement = (
+                "/* BUGGY_LINE_START */\n"
+                "  width: 100% !important;\n"
+                "  max-width: 100% !important;\n"
+                "  min-height: 48px !important;\n"
+                "  padding: 16px 24px !important;\n"
+                "  box-sizing: border-box !important;\n"
+                "  /* BUGGY_LINE_END */"
+            )
+            if re.search(pattern, original_content):
+                repaired_content = re.sub(pattern, replacement, original_content)
+        elif defect_type == "contrast_violation":
+            repaired_content = original_content.replace(
+                "color: #1e293b !important;",
+                "color: #f0f6fc !important;"
+            )
+            if "color: #1e293b" not in original_content:
+                repaired_content = original_content.replace(
+                    "color: var(--text-secondary);",
+                    "color: #f0f6fc !important;"
+                )
+        else:
+            # Fallback CSS rule append or patch
+            css_patch_rule = self.generate_css_patch(defect)
+            repaired_content = original_content + f"\n\n/* OmniSight Self-Healing Patch */\n{css_patch_rule}\n"
 
         # Generate standard unified diff
         orig_lines = original_content.splitlines(keepends=True)
@@ -97,28 +168,110 @@ class FixGenerator:
             print(f"[OmniSight FixGenerator] Failed to write patch: {e}")
             return False
 
-    def reset_file_to_buggy_state(self) -> bool:
+    def reset_file_to_clean_state(self) -> bool:
         """
-        Resets the stylesheet back to intentional buggy state for repeated demo testing.
+        Resets stylesheet to 100% compliant, clean state with zero bugs.
         """
         try:
             content = self.css_file.read_text(encoding="utf-8")
             pattern = r"/\* BUGGY_LINE_START \*/[\s\S]*?/\* BUGGY_LINE_END \*/"
-            buggy_replacement = (
+            clean_btn = (
                 "/* BUGGY_LINE_START */\n"
-                "  width: 520px !important;\n"
-                "  max-width: none !important;\n"
+                "  width: 100% !important;\n"
+                "  max-width: 100% !important;\n"
+                "  min-height: 48px !important;\n"
+                "  box-sizing: border-box !important;\n"
                 "  /* BUGGY_LINE_END */"
             )
             if re.search(pattern, content):
-                new_content = re.sub(pattern, buggy_replacement, content)
-            else:
-                new_content = content.replace(
-                    "width: 100% !important;\n  max-width: 100% !important;",
-                    "width: 520px !important;\n  max-width: none !important;"
-                )
-            self.css_file.write_text(new_content, encoding="utf-8")
+                content = re.sub(pattern, clean_btn, content)
+            
+            # Reset promo overlay
+            content = re.sub(
+                r"\.promo-floating-overlay\s*\{[^}]*\}",
+                ".promo-floating-overlay {\n  display: none !important;\n}",
+                content
+            )
+            # Reset guarantee text contrast
+            content = content.replace("color: #1e293b !important;", "color: var(--text-secondary);")
+            self.css_file.write_text(content, encoding="utf-8")
             return True
         except Exception as e:
-            print(f"[OmniSight FixGenerator] Reset failed: {e}")
+            print(f"[OmniSight FixGenerator] Clean reset failed: {e}")
+            return False
+
+    def reset_file_to_buggy_state(self) -> bool:
+        """
+        Resets the stylesheet back to intentional 520px buggy state for mobile overflow testing.
+        """
+        return self.inject_bug_scenario("overflow")
+
+    def inject_bug_scenario(self, scenario_name: str) -> bool:
+        """
+        Injects a specific chaos test scenario into test-app/checkout.css.
+        """
+        try:
+            # First reset to base clean state
+            self.reset_file_to_clean_state()
+            content = self.css_file.read_text(encoding="utf-8")
+            scenario_key = scenario_name.lower().strip()
+
+            if scenario_key in ["overflow", "button_overflow"]:
+                pattern = r"/\* BUGGY_LINE_START \*/[\s\S]*?/\* BUGGY_LINE_END \*/"
+                buggy_btn = (
+                    "/* BUGGY_LINE_START */\n"
+                    "  width: 520px !important;\n"
+                    "  max-width: none !important;\n"
+                    "  /* BUGGY_LINE_END */"
+                )
+                if re.search(pattern, content):
+                    content = re.sub(pattern, buggy_btn, content)
+                else:
+                    content = content.replace(
+                        "width: 100% !important;\n  max-width: 100% !important;",
+                        "width: 520px !important;\n  max-width: none !important;"
+                    )
+
+            elif scenario_key in ["touch_target", "small_target"]:
+                pattern = r"/\* BUGGY_LINE_START \*/[\s\S]*?/\* BUGGY_LINE_END \*/"
+                tiny_btn = (
+                    "/* BUGGY_LINE_START */\n"
+                    "  width: 100% !important;\n"
+                    "  max-width: 100% !important;\n"
+                    "  height: 22px !important;\n"
+                    "  min-height: 22px !important;\n"
+                    "  padding: 2px 8px !important;\n"
+                    "  font-size: 0.65rem !important;\n"
+                    "  box-sizing: border-box !important;\n"
+                    "  /* BUGGY_LINE_END */"
+                )
+                if re.search(pattern, content):
+                    content = re.sub(pattern, tiny_btn, content)
+
+            elif scenario_key in ["zindex_overlap", "overlay_collision", "overlap"]:
+                overlay_active = (
+                    ".promo-floating-overlay {\n"
+                    "  display: flex !important;\n"
+                    "  position: absolute !important;\n"
+                    "  top: 0 !important;\n"
+                    "  left: 0 !important;\n"
+                    "  width: 100% !important;\n"
+                    "  height: 56px !important;\n"
+                    "  z-index: 9999 !important;\n"
+                    "  align-items: center;\n"
+                    "  justify-content: center;\n"
+                    "}"
+                )
+                content = re.sub(r"\.promo-floating-overlay\s*\{[^}]*\}", overlay_active, content)
+
+            elif scenario_key in ["contrast", "low_contrast"]:
+                content = content.replace(
+                    "color: var(--text-secondary);",
+                    "color: #1e293b !important;"
+                )
+
+            self.css_file.write_text(content, encoding="utf-8")
+            return True
+        except Exception as e:
+            print(f"[OmniSight FixGenerator] Inject failed: {e}")
             return False

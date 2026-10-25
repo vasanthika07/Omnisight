@@ -1,7 +1,15 @@
 import React from 'react';
-import { Eye, RefreshCw, Play } from 'lucide-react';
+import { Eye, RefreshCw, Play, GitBranch, FileText } from 'lucide-react';
 
-export default function Navbar({ onResetBug, onTriggerAudit, isRunning, engineInfo }) {
+export default function Navbar({ 
+  onResetBug, 
+  onTriggerAudit, 
+  isRunning, 
+  engineInfo, 
+  onOpenCIModal, 
+  onOpenReportModal,
+  hasRunData 
+}) {
   return (
     <header className="top-nav">
       <div className="nav-brand">
@@ -21,13 +29,33 @@ export default function Navbar({ onResetBug, onTriggerAudit, isRunning, engineIn
         </div>
 
         <button 
+          className="btn btn-secondary nav-action-btn"
+          onClick={onOpenCIModal}
+          title="CI/CD Gateway & Automated Webhook Simulator"
+        >
+          <GitBranch size={15} color="#06b6d4" />
+          <span>CI/CD Gateway</span>
+        </button>
+
+        {hasRunData && (
+          <button 
+            className="btn btn-secondary nav-action-btn"
+            onClick={onOpenReportModal}
+            title="Export Executive Visual QA Report"
+          >
+            <FileText size={15} color="#a855f7" />
+            <span>Export Report</span>
+          </button>
+        )}
+
+        <button 
           className="btn btn-secondary" 
           onClick={onResetBug}
           disabled={isRunning}
           title="Reset the checkout page back to intentional bug for testing"
         >
-          <RefreshCw size={16} className={isRunning ? 'spin' : ''} />
-          <span>Reset Staging Bug</span>
+          <RefreshCw size={15} className={isRunning ? 'spin' : ''} />
+          <span>Reset Bug</span>
         </button>
 
         <button 
@@ -42,7 +70,7 @@ export default function Navbar({ onResetBug, onTriggerAudit, isRunning, engineIn
             </>
           ) : (
             <>
-              <Play size={16} fill="currentColor" />
+              <Play size={15} fill="currentColor" />
               <span>Run Autonomous Audit</span>
             </>
           )}

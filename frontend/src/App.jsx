@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
+import MetricsBar from './components/MetricsBar';
 import ControlBar from './components/ControlBar';
 import VisualDiffInspector from './components/VisualDiffInspector';
 import AgentTimeline from './components/AgentTimeline';
 import DefectCard from './components/DefectCard';
 import PatchViewer from './components/PatchViewer';
 import PRModal from './components/PRModal';
+import CIWebhookModal from './components/CIWebhookModal';
+import ExportReportModal from './components/ExportReportModal';
 import { History, Sparkles } from 'lucide-react';
 
 const BACKEND_URL = 'http://127.0.0.1:8000';
@@ -15,10 +18,27 @@ export default function App() {
   const [targetUrl, setTargetUrl] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [engineInfo, setEngineInfo] = useState('');
+  const [selectedEngine, setSelectedEngine] = useState('builtin');
   const [currentRun, setCurrentRun] = useState(null);
   const [history, setHistory] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [stagingHealth, setStagingHealth] = useState('Compliant');
+  
+  // Modals
   const [isPRModalOpen, setIsPRModalOpen] = useState(false);
+  const [isCIModalOpen, setIsCIModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [bannerNotice, setBannerNotice] = useState(null);
+
+  const fetchAnalytics = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/analytics`);
+      const data = await res.json();
+      setAnalytics(data);
+    } catch (e) {
+      console.warn('Could not fetch analytics:', e);
+    }
+  };
 
   const fetchHistory = async () => {
     try {
@@ -33,7 +53,7 @@ export default function App() {
     }
   };
 
-  // Load system info and recent history on mount
+  // Load system info, analytics, and history on mount
   useEffect(() => {
     fetch(`${BACKEND_URL}/`)
       .then((res) => res.json())
@@ -43,6 +63,7 @@ export default function App() {
       .catch(() => setEngineInfo('VLM: Autonomous Spatial Engine'));
 
     fetchHistory();
+    fetchAnalytics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -53,21 +74,25 @@ export default function App() {
 
   const handleTriggerAudit = async () => {
     setIsRunning(true);
-    setBannerNotice('OmniSight Autonomous QA Agent Dispatched: Navigating & Inspecting...');
+    setBannerNotice(`OmniSight QA Agent Dispatched: Navigating & Inspecting ${viewport === 'matrix' ? 'All Viewports' : viewport}...`);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/audit`, {
+      const endpoint = viewport === 'matrix' ? `${BACKEND_URL}/api/audit-matrix` : `${BACKEND_URL}/api/audit`;
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           viewport,
           target_url: targetUrl || null,
-          max_retries: 2
+          max_retries: 2,
+          engine: selectedEngine
         })
       });
       const data = await res.json();
       setCurrentRun(data);
+      setStagingHealth(data.verification_passed ? 'Compliant' : 'Anomaly Detected');
       fetchHistory();
-      showBanner(`Audit Complete: ${data.verification_passed ? 'Self-Healing Verified Successfully!' : 'Audit Finished'}`);
+      fetchAnalytics();
+      showBanner(`Audit Complete: ${data.verification_passed ? 'Self-Healing Verified Successfully!' : 'Action Required'}`);
     } catch (err) {
       alert(`Audit failed: ${err.message}`);
     } finally {
@@ -79,9 +104,36 @@ export default function App() {
     try {
       const res = await fetch(`${BACKEND_URL}/api/reset-bug`, { method: 'POST' });
       const data = await res.json();
-      showBanner(data.message || 'Reset to intentional bug state.');
+      setStagingHealth('Anomaly Active');
+      showBanner(data.message || 'Reset to intentional 520px bug state.');
     } catch (e) {
       alert('Reset failed: ' + e.message);
+    }
+  };
+
+  const handleInjectChaosBug = async (scenarioId) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/inject-bug`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario: scenarioId })
+      });
+      const data = await res.json();
+      setStagingHealth(`${scenarioId.toUpperCase()} Injected`);
+      showBanner(data.message || `Chaos Anomaly '${scenarioId}' Injected.`);
+    } catch (e) {
+      alert('Inject failed: ' + e.message);
+    }
+  };
+
+  const handleResetClean = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/reset-clean`, { method: 'POST' });
+      const data = await res.json();
+      setStagingHealth('Compliant (Clean)');
+      showBanner(data.message || 'Reset stylesheet to 100% compliant clean state.');
+    } catch (e) {
+      alert('Clean reset failed: ' + e.message);
     }
   };
 
@@ -101,6 +153,7 @@ export default function App() {
       showBanner(`PR #${data.pr_number || 42} created: ${data.message || 'Pull request prepared successfully.'}`);
     }
     fetchHistory();
+    fetchAnalytics();
     return data;
   };
 
@@ -111,6 +164,14 @@ export default function App() {
         onTriggerAudit={handleTriggerAudit}
         isRunning={isRunning}
         engineInfo={engineInfo}
+        onOpenCIModal={() => setIsCIModalOpen(true)}
+        onOpenReportModal={() => setIsReportModalOpen(true)}
+        hasRunData={Boolean(currentRun)}
+      />
+
+      <MetricsBar 
+        analytics={analytics} 
+        stagingStatus={stagingHealth} 
       />
 
       {bannerNotice && (
@@ -139,6 +200,10 @@ export default function App() {
           isRunning={isRunning}
           onTriggerAudit={handleTriggerAudit}
           onResetBug={handleResetBug}
+          onInjectChaosBug={handleInjectChaosBug}
+          onResetClean={handleResetClean}
+          selectedEngine={selectedEngine}
+          setSelectedEngine={setSelectedEngine}
         />
 
         <div className="dashboard-grid">
@@ -153,6 +218,8 @@ export default function App() {
               patch={currentRun?.patch} 
               prNumber={currentRun?.pr_number}
               prUrl={currentRun?.pr_url}
+              runId={currentRun?.id}
+              backendUrl={BACKEND_URL}
               onOpenPRModal={() => setIsPRModalOpen(true)}
               canOpenPR={currentRun?.verification_passed}
             />
@@ -170,6 +237,7 @@ export default function App() {
               confidenceScore={currentRun?.confidence_score ?? currentRun?.timeline?.find(t => t.step === 'defect_detection')?.details?.confidence}
               croppedArtifact={currentRun?.cropped_defect_token_artifact || currentRun?.crop_screenshot}
               engineUsed={currentRun?.engine_used}
+              tokenTelemetry={currentRun?.token_telemetry}
               backendUrl={BACKEND_URL}
             />
 
@@ -219,12 +287,33 @@ export default function App() {
         </div>
       </main>
 
+      {/* GitHub PR Modal */}
       <PRModal 
         key={currentRun?.id || 'none'}
         isOpen={isPRModalOpen}
         onClose={() => setIsPRModalOpen(false)}
         runData={currentRun}
         onConfirmPR={handleConfirmPR}
+      />
+
+      {/* CI/CD Gateway Simulator Modal */}
+      <CIWebhookModal 
+        isOpen={isCIModalOpen}
+        onClose={() => setIsCIModalOpen(false)}
+        backendUrl={BACKEND_URL}
+        onJobTriggered={(job) => {
+          showBanner(`CI/CD Webhook Triggered: Job ${job.job_id}`);
+          fetchHistory();
+          fetchAnalytics();
+        }}
+      />
+
+      {/* Executive QA Report Modal */}
+      <ExportReportModal 
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        runData={currentRun}
+        backendUrl={BACKEND_URL}
       />
     </div>
   );

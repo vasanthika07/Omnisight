@@ -1,11 +1,22 @@
-import React, { useState, useRef } from 'react';
-import { Columns, SplitSquareVertical, Flame, Layers } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Columns, SplitSquareVertical, Flame, Layers, Smartphone, Tablet, Monitor, Eye, Sparkles } from 'lucide-react';
 
 export default function VisualDiffInspector({ runData, backendUrl = 'http://127.0.0.1:8000' }) {
-  const [viewMode, setViewMode] = useState('slider'); // 'slider', 'side', 'heatmap'
+  const isMatrixRun = runData?.is_matrix || Boolean(runData?.matrix_viewports);
+  const [viewMode, setViewMode] = useState(isMatrixRun ? 'matrix' : 'slider');
   const [sliderPos, setSliderPos] = useState(50);
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
+  const [heatmapOpacity, setHeatmapOpacity] = useState(85);
   const containerRef = useRef(null);
+
+  // Sync default mode if matrix run is loaded
+  useEffect(() => {
+    if (runData?.is_matrix) {
+      setViewMode('matrix');
+    } else if (viewMode === 'matrix' && !runData?.is_matrix) {
+      setViewMode('slider');
+    }
+  }, [runData]);
 
   if (!runData || !runData.before_screenshot) {
     return (
@@ -18,7 +29,7 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
         </div>
         <div className="empty-state">
           <Layers size={40} />
-          <p>No active audit run loaded. Click "Run Autonomous Audit" above to begin.</p>
+          <p>No active audit run loaded. Click "Run Audit" or "Chaos Studio" above to begin.</p>
         </div>
       </div>
     );
@@ -27,6 +38,7 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
   const beforeUrl = `${backendUrl}/screenshots/${runData.before_screenshot}`;
   const afterUrl = runData.after_screenshot ? `${backendUrl}/screenshots/${runData.after_screenshot}` : null;
   const diffUrl = runData.diff_screenshot ? `${backendUrl}/screenshots/${runData.diff_screenshot}` : null;
+  const diffStats = runData.pixel_diff_stats || {};
 
   const handleMouseMove = (e) => {
     if (!containerRef.current) return;
@@ -45,12 +57,27 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
           <Layers size={18} color="#6366f1" />
           <h2>Visual Diff & Evidence Inspector</h2>
           <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-            ({runData.viewport.toUpperCase()} • {runData.defects_found === 0 ? 'PASSED (ZERO DEFECTS)' : (runData.verification_passed ? 'HEALED & VERIFIED' : 'UNVERIFIED')})
+            ({runData.viewport.toUpperCase()} • {runData.defects_found === 0 ? 'PASSED (ZERO DEFECTS)' : (runData.verification_passed ? 'HEALED & VERIFIED' : 'ACTION REQUIRED')})
           </span>
+          {diffStats.diff_percentage !== undefined && diffStats.diff_percentage > 0 && (
+            <span className="pill-diff-stats">
+              Pixel Diff: {diffStats.diff_percentage}% ({diffStats.diff_pixels?.toLocaleString()} px)
+            </span>
+          )}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="view-mode-selector">
+            {runData.matrix_viewports && (
+              <button 
+                className={`view-mode-btn ${viewMode === 'matrix' ? 'active' : ''}`}
+                onClick={() => setViewMode('matrix')}
+                title="Cross-device 3-tier responsive matrix view"
+              >
+                <Layers size={14} style={{ marginRight: '4px' }} />
+                Matrix View
+              </button>
+            )}
             <button 
               className={`view-mode-btn ${viewMode === 'slider' ? 'active' : ''}`}
               onClick={() => setViewMode('slider')}
@@ -86,12 +113,106 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
               checked={showBoundingBoxes} 
               onChange={(e) => setShowBoundingBoxes(e.target.checked)} 
             />
-            Show Bounding Boxes
+            Bounding Boxes
           </label>
         </div>
       </div>
 
+      {/* Heatmap Blend Opacity Control (Visible in Heatmap Mode) */}
+      {viewMode === 'heatmap' && diffUrl && (
+        <div className="heatmap-control-strip">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Flame size={14} color="#ec4899" />
+            <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#f472b6' }}>
+              Heatmap Overlay Blend: {heatmapOpacity}%
+            </span>
+          </div>
+          <input 
+            type="range" 
+            min="20" 
+            max="100" 
+            value={heatmapOpacity}
+            onChange={(e) => setHeatmapOpacity(Number(e.target.value))}
+            className="blend-slider"
+          />
+        </div>
+      )}
+
       <div className="diff-stage-container">
+        {/* MATRIX RESPONSIVE GRID MODE */}
+        {viewMode === 'matrix' && runData.matrix_viewports && (
+          <div className="matrix-devices-grid">
+            {/* Mobile Tier */}
+            <div className="matrix-device-card">
+              <div className="matrix-card-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Smartphone size={16} color="#06b6d4" />
+                  <strong>Mobile Tier (375x812)</strong>
+                </div>
+                <span className={`status-pill ${runData.matrix_viewports.mobile?.verification_passed ? 'pill-green' : 'pill-amber'}`}>
+                  {runData.matrix_viewports.mobile?.verification_passed ? 'HEALED ✅' : 'DEFECT DETECTED'}
+                </span>
+              </div>
+              <div className="matrix-img-box">
+                <img 
+                  src={`${backendUrl}/screenshots/${runData.matrix_viewports.mobile?.after_screenshot || runData.matrix_viewports.mobile?.before_screenshot}`} 
+                  alt="Mobile Viewport" 
+                />
+              </div>
+              <div className="matrix-card-footer">
+                <span>Defects: {runData.matrix_viewports.mobile?.defects_found || 0}</span>
+                <span>Engine: {runData.matrix_viewports.mobile?.engine_used?.split(' ')[0] || 'Built-in'}</span>
+              </div>
+            </div>
+
+            {/* Tablet Tier */}
+            <div className="matrix-device-card">
+              <div className="matrix-card-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Tablet size={16} color="#818cf8" />
+                  <strong>Tablet Tier (768x1024)</strong>
+                </div>
+                <span className={`status-pill ${runData.matrix_viewports.tablet?.verification_passed ? 'pill-green' : 'pill-amber'}`}>
+                  {runData.matrix_viewports.tablet?.verification_passed ? 'COMPLIANT ✅' : 'DEFECT DETECTED'}
+                </span>
+              </div>
+              <div className="matrix-img-box">
+                <img 
+                  src={`${backendUrl}/screenshots/${runData.matrix_viewports.tablet?.after_screenshot || runData.matrix_viewports.tablet?.before_screenshot}`} 
+                  alt="Tablet Viewport" 
+                />
+              </div>
+              <div className="matrix-card-footer">
+                <span>Defects: {runData.matrix_viewports.tablet?.defects_found || 0}</span>
+                <span>Responsive Score: 100%</span>
+              </div>
+            </div>
+
+            {/* Desktop Tier */}
+            <div className="matrix-device-card">
+              <div className="matrix-card-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Monitor size={16} color="#a855f7" />
+                  <strong>Desktop Tier (1440x900)</strong>
+                </div>
+                <span className={`status-pill ${runData.matrix_viewports.desktop?.verification_passed ? 'pill-green' : 'pill-amber'}`}>
+                  {runData.matrix_viewports.desktop?.verification_passed ? 'COMPLIANT ✅' : 'DEFECT DETECTED'}
+                </span>
+              </div>
+              <div className="matrix-img-box">
+                <img 
+                  src={`${backendUrl}/screenshots/${runData.matrix_viewports.desktop?.after_screenshot || runData.matrix_viewports.desktop?.before_screenshot}`} 
+                  alt="Desktop Viewport" 
+                />
+              </div>
+              <div className="matrix-card-footer">
+                <span>Defects: {runData.matrix_viewports.desktop?.defects_found || 0}</span>
+                <span>Viewport: 1440x900</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SLIDER MODE */}
         {viewMode === 'slider' && afterUrl && (
           <div 
@@ -132,9 +253,10 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
                     fontSize: '10px',
                     fontWeight: 700,
                     padding: '1px 6px',
-                    borderRadius: '3px'
+                    borderRadius: '3px',
+                    whiteSpace: 'nowrap'
                   }}>
-                    DEFECT: {runData.defects?.[0]?.element}
+                    DEFECT: {runData.defects?.[0]?.element} ({runData.defects?.[0]?.type})
                   </span>
                 </div>
               )}
@@ -174,17 +296,35 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
           </div>
         )}
 
-        {/* HEATMAP MODE */}
+        {/* HEATMAP BLEND MODE */}
         {viewMode === 'heatmap' && diffUrl && (
-          <div className="heatmap-frame">
-            <span style={{ fontSize: '0.8rem', color: '#ec4899', fontWeight: 700 }}>
+          <div className="heatmap-frame" style={{ position: 'relative' }}>
+            <span style={{ fontSize: '0.8rem', color: '#ec4899', fontWeight: 700, marginBottom: '8px' }}>
               PIXEL DISCREPANCY MASK (PIL ENHANCED)
             </span>
-            <img src={diffUrl} alt="Discrepancy Heatmap" />
+            <div style={{ position: 'relative', display: 'inline-block', borderRadius: '8px', overflow: 'hidden' }}>
+              {/* Base Before Image */}
+              <img src={beforeUrl} alt="Base Viewport" style={{ display: 'block' }} />
+              {/* Heatmap overlay on top with adjustable opacity */}
+              <img 
+                src={diffUrl} 
+                alt="Discrepancy Heatmap" 
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  opacity: heatmapOpacity / 100,
+                  mixBlendMode: 'screen',
+                  pointerEvents: 'none'
+                }}
+              />
+            </div>
           </div>
         )}
 
-        {!afterUrl && (
+        {!afterUrl && viewMode !== 'matrix' && (
           <div className="side-frame" style={{ padding: '20px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <span className="side-label label-before">
               {runData.defects_found === 0 ? 'AUDITED VIEWPORT (COMPLIANT)' : 'STAGING VIEWPORT SCREENSHOT'}

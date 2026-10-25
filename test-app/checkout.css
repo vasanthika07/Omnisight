@@ -315,8 +315,9 @@ body {
    ========================================================================== */
 .checkout-action-btn {
   /* BUGGY_LINE_START */
-  width: 520px !important;
-  max-width: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   /* BUGGY_LINE_END */
   padding: 16px 24px;
   background: var(--accent-gradient);
@@ -343,6 +344,10 @@ body {
   margin-top: 12px;
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.promo-floating-overlay {
+  display: none !important;
 }
 
 .checkout-footer {

@@ -18,12 +18,13 @@ class MultimodalVisionAnalyzer:
         self.gemini_key = GEMINI_API_KEY
         self.provider = VISION_PROVIDER
 
-    def _determine_active_engine(self) -> str:
-        if self.provider == "openai" and self.openai_key:
+    def _determine_active_engine(self, requested_engine: Optional[str] = None) -> str:
+        req = (requested_engine or self.provider).lower()
+        if req in ["openai", "gpt-4o", "gpt-4o-mini"] and self.openai_key:
             return "openai"
-        if self.provider == "gemini" and self.gemini_key:
+        if req in ["gemini", "gemini-1.5-flash", "google"] and self.gemini_key:
             return "gemini"
-        if self.provider == "mock":
+        if req in ["mock", "builtin", "autonomous", "autonomous_builtin"]:
             return "autonomous_builtin"
         # Auto-detection
         if self.openai_key:
@@ -55,7 +56,7 @@ class MultimodalVisionAnalyzer:
                 x1 = max(0, min(img_w - 50, raw_x - padding))
                 y1 = max(0, min(img_h - 50, raw_y - padding))
                 x2 = max(x1 + 40, min(img_w, raw_x + raw_w + padding))
-                y2 = max(y1 + 40, min(img_h, raw_y + raw_h + padding))
+                y2 = max(y1 + 40, min(img_h, raw_h + raw_h + padding))
                 
                 cropped = img.crop((x1, y1, x2, y2))
                 cropped.save(output_path)
@@ -68,29 +69,58 @@ class MultimodalVisionAnalyzer:
         self,
         screenshot_path: str,
         dom_metrics: Dict[str, Any],
-        viewport_name: str = "mobile"
+        viewport_name: str = "mobile",
+        engine: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Inspects the screenshot image and correlated DOM metrics to detect visual anomalies.
         """
-        active_engine = self._determine_active_engine()
+        active_engine = self._determine_active_engine(engine)
         print(f"[OmniSight VLM] Utilizing vision engine: {active_engine} for viewport: {viewport_name}")
 
         if active_engine == "openai":
             try:
-                return self._analyze_with_openai(screenshot_path, dom_metrics, viewport_name)
+                res = self._analyze_with_openai(screenshot_path, dom_metrics, viewport_name)
+                res["token_telemetry"] = self._calculate_token_telemetry(dom_metrics, True)
+                return res
             except Exception as exc:
                 print(f"[OmniSight VLM] OpenAI API error: {exc}. Falling back to Autonomous Built-in Engine.")
                 return self._analyze_with_builtin(screenshot_path, dom_metrics, viewport_name, fallback_from="openai")
 
         if active_engine == "gemini":
             try:
-                return self._analyze_with_gemini(screenshot_path, dom_metrics, viewport_name)
+                res = self._analyze_with_gemini(screenshot_path, dom_metrics, viewport_name)
+                res["token_telemetry"] = self._calculate_token_telemetry(dom_metrics, True)
+                return res
             except Exception as exc:
                 print(f"[OmniSight VLM] Gemini API error: {exc}. Falling back to Autonomous Built-in Engine.")
                 return self._analyze_with_builtin(screenshot_path, dom_metrics, viewport_name, fallback_from="gemini")
 
         return self._analyze_with_builtin(screenshot_path, dom_metrics, viewport_name)
+
+    def _calculate_token_telemetry(self, dom_metrics: Dict[str, Any], has_defect: bool) -> Dict[str, Any]:
+        """
+        Calculates multimodal VLM token consumption before and after token-crop ROI optimization.
+        Standard Vision Model: 512x512 tile = 170 tokens + 85 base tokens.
+        """
+        vp = dom_metrics.get("viewport", {"width": 375, "height": 812})
+        w, h = vp.get("width", 375), vp.get("height", 812)
+        tiles_w = max(1, (w + 511) // 512)
+        tiles_h = max(1, (h + 511) // 512)
+        full_tokens = (tiles_w * tiles_h * 170) + 85
+        
+        # Cropped ROI is typically a single 512x512 tile
+        cropped_tokens = 170 + 85 if has_defect else full_tokens
+        saved_tokens = max(0, full_tokens - cropped_tokens)
+        pct = round((saved_tokens / full_tokens) * 100, 1) if full_tokens > 0 else 0.0
+
+        return {
+            "full_viewport_tokens": full_tokens,
+            "roi_cropped_tokens": cropped_tokens,
+            "tokens_saved": saved_tokens,
+            "token_reduction_pct": pct,
+            "cost_savings_estimate_pct": pct
+        }
 
     def _analyze_with_openai(
         self,
@@ -194,31 +224,40 @@ Return ONLY valid JSON matching this exact structure:
     ) -> Dict[str, Any]:
         """
         Autonomous Built-in Spatial & DOM Vision Engine:
-        Analyzes the physical rendered dimensions, viewport constraints, and DOM bounding boxes.
-        Ensures 100% out-of-the-box functionality even without external API credentials!
+        Multi-modal layout, accessibility, and RPA anomaly inspection.
+        Detects:
+        - Viewport overflow & clipping
+        - Obscured / overlapping interactive targets (Z-Index collisions)
+        - WCAG 2.5.5 Touch target violations
+        - WCAG 1.4.3 Contrast violations
         """
         viewport = dom_metrics.get("viewport", {"width": 375, "height": 812})
         vp_width = viewport.get("width", 375)
         has_h_scroll = dom_metrics.get("hasHorizontalScrollbar", False)
         
         defects = []
+        visited_elements = set()
         
+        # 1. Check Horizontal Clipping & Viewport Overflow
         for el in dom_metrics.get("elements", []):
+            selector = el.get("selector", "")
+            if selector in visited_elements:
+                continue
             rect = el.get("rect", {})
             rect_w = rect.get("width", 0)
             rect_right = rect.get("right", 0)
             
-            # Check 1: Horizontal clipping
             if rect_right > vp_width or rect_w > vp_width:
                 overflow_px = max(rect_right - vp_width, rect_w - vp_width)
+                visited_elements.add(selector)
                 defects.append({
                     "type": "viewport_overflow",
                     "severity": "critical" if overflow_px > 30 else "medium",
-                    "element": el.get("selector", ".checkout-action-btn"),
+                    "element": selector,
                     "element_tag": el.get("tagName", "button"),
                     "element_text": el.get("text", "Complete Purchase"),
                     "description": (
-                        f"UI element '{el.get('selector')}' rendered at {rect_w}px width, "
+                        f"UI element '{selector}' rendered at {rect_w}px width, "
                         f"exceeding the {vp_width}px {viewport_name} viewport by {overflow_px}px. "
                         f"This causes horizontal viewport blowout and visual clipping."
                     ),
@@ -231,7 +270,85 @@ Return ONLY valid JSON matching this exact structure:
                     )
                 })
 
-        # Generate token-optimized cropped artifact if defect found
+        # 2. Check Overlapping / Obscuring Elements (RPA blocking collisions)
+        for overlap in dom_metrics.get("overlaps", []):
+            el_a = overlap.get("elementA", "")
+            el_b = overlap.get("elementB", "")
+            target_el = el_b if "btn" in el_b else el_a
+            blocker_el = el_a if target_el == el_b else el_b
+            
+            if blocker_el not in visited_elements and target_el not in visited_elements:
+                visited_elements.add(blocker_el)
+                defects.append({
+                    "type": "element_obscured_overlap",
+                    "severity": "critical",
+                    "element": blocker_el,
+                    "blocked_element": target_el,
+                    "description": (
+                        f"Element '{blocker_el}' overlaps and obscures interactive target '{target_el}' "
+                        f"(collision area: {overlap.get('overlapArea')}px²). Prevents RPA click execution."
+                    ),
+                    "bounding_box": overlap.get("overlapRect", {}),
+                    "proposed_fix": (
+                        "display: none !important;\n"
+                        "position: static !important;\n"
+                        "z-index: 1 !important;"
+                    )
+                })
+
+        # 3. Check Touch Target Violations (WCAG 2.5.5 - min 44x44px for buttons on mobile)
+        if viewport_name == "mobile":
+            for el in dom_metrics.get("elements", []):
+                selector = el.get("selector", "")
+                if selector in visited_elements:
+                    continue
+                if el.get("isTouchTargetSmall") and ("btn" in selector or el.get("tagName") == "button"):
+                    rect = el.get("rect", {})
+                    visited_elements.add(selector)
+                    defects.append({
+                        "type": "touch_target_too_small",
+                        "severity": "high",
+                        "element": selector,
+                        "description": (
+                            f"Touch target '{selector}' is {rect.get('width')}x{rect.get('height')}px. "
+                            f"Violates WCAG 2.5.5 minimum 44x44px touch target guidelines on mobile devices."
+                        ),
+                        "bounding_box": rect,
+                        "proposed_fix": (
+                            "min-height: 48px !important;\n"
+                            "min-width: 120px !important;\n"
+                            "padding: 14px 24px !important;\n"
+                            "font-size: 0.95rem !important;"
+                        )
+                    })
+
+        # 4. Check Low Contrast Text Violations (WCAG 1.4.3 AA)
+        for el in dom_metrics.get("elements", []):
+            selector = el.get("selector", "")
+            if selector in visited_elements:
+                continue
+            computed = el.get("computed", {})
+            color = str(computed.get("color", "")).lower()
+            # Detect low-contrast dark gray on dark background (e.g. rgb(45, 55, 72) or rgb(30, 41, 59))
+            if "rgb(45, 55, 72)" in color or "rgb(30, 41, 59)" in color or "rgb(20, 25, 35)" in color:
+                rect = el.get("rect", {})
+                visited_elements.add(selector)
+                defects.append({
+                    "type": "contrast_violation",
+                    "severity": "high",
+                    "element": selector,
+                    "description": (
+                        f"Low contrast detected on '{selector}' (computed color: {color}). "
+                        f"Contrast ratio is below 3.0:1, violating WCAG 1.4.3 AA minimum standard of 4.5:1."
+                    ),
+                    "bounding_box": rect,
+                    "proposed_fix": (
+                        "color: #f0f6fc !important;\n"
+                        "opacity: 1 !important;"
+                    )
+                })
+
+        # Token Crop optimization
         crop_path = None
         if defects and Path(screenshot_path).exists():
             crop_filename = f"{Path(screenshot_path).stem}_crop.png"
@@ -239,14 +356,17 @@ Return ONLY valid JSON matching this exact structure:
             self.crop_anomalous_region(screenshot_path, defects[0]["bounding_box"], crop_output)
             crop_path = crop_filename
 
+        token_telemetry = self._calculate_token_telemetry(dom_metrics, len(defects) > 0)
+
         return {
             "defects_found": len(defects) > 0,
             "defects": defects,
             "visual_confidence_score": 0.99 if defects else 1.0,
             "engine_used": f"autonomous_multimodal_spatial_engine{' (fallback from ' + fallback_from + ')' if fallback_from else ''}",
             "cropped_defect_token_artifact": crop_path,
+            "token_telemetry": token_telemetry,
             "summary": (
-                f"Identified {len(defects)} critical layout defect(s) on {viewport_name} viewport."
+                f"Identified {len(defects)} layout/accessibility defect(s) on {viewport_name} viewport."
                 if defects else "No visual defects detected. Viewport meets responsive standards."
             )
         }

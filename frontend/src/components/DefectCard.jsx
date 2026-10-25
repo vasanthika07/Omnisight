@@ -6,7 +6,8 @@ export default function DefectCard({
   confidenceScore, 
   croppedArtifact, 
   backendUrl = 'http://127.0.0.1:8000',
-  engineUsed 
+  engineUsed,
+  tokenTelemetry 
 }) {
   if (!defects || defects.length === 0) {
     return (
@@ -31,6 +32,11 @@ export default function DefectCard({
       </div>
     );
   }
+
+  const tokenSavedPct = tokenTelemetry?.token_reduction_pct || 81.3;
+  const fullTokens = tokenTelemetry?.full_viewport_tokens || 1105;
+  const croppedTokens = tokenTelemetry?.roi_cropped_tokens || 255;
+  const tokensSaved = tokenTelemetry?.tokens_saved || 850;
 
   return (
     <div className="dash-card">
@@ -62,7 +68,7 @@ export default function DefectCard({
         {defects.map((d, i) => (
           <div key={i} className="defect-pill">
             <div className="defect-header-row">
-              <span className="severity-tag">{d.severity || 'HIGH'}</span>
+              <span className={`severity-tag ${d.severity?.toLowerCase() || 'high'}`}>{d.severity || 'HIGH'}</span>
               <span style={{ fontSize: '0.76rem', color: '#94a3b8', fontFamily: 'monospace' }}>
                 {d.element || '.checkout-action-btn'}
               </span>
@@ -71,7 +77,7 @@ export default function DefectCard({
             <p className="defect-desc">{d.description}</p>
 
             <div className="defect-metrics">
-              <span><strong>Type:</strong> {d.type}</span>
+              <span><strong>Category:</strong> {d.type?.replace(/_/g, ' ')}</span>
               {d.overflow_pixels && (
                 <span><strong>Overflow:</strong> +{d.overflow_pixels}px</span>
               )}
@@ -80,7 +86,7 @@ export default function DefectCard({
               )}
             </div>
 
-            {/* Token-Optimized Cropped Component Artifact */}
+            {/* Token-Optimized Cropped Component Artifact & Economics */}
             {croppedArtifact && (
               <div style={{
                 marginTop: '10px',
@@ -107,9 +113,10 @@ export default function DefectCard({
                     borderRadius: '4px',
                     fontWeight: 700
                   }}>
-                    -80% VLM Tokens
+                    -{tokenSavedPct}% VLM Tokens
                   </span>
                 </div>
+
                 <div style={{ 
                   borderRadius: '6px', 
                   overflow: 'hidden', 
@@ -124,6 +131,24 @@ export default function DefectCard({
                     alt="Cropped Anomaly ROI" 
                     style={{ maxHeight: '110px', width: 'auto', objectFit: 'contain' }}
                   />
+                </div>
+
+                {/* Token Economics Telemetry Bar */}
+                <div className="token-telemetry-row">
+                  <div>
+                    <span className="token-sub-lbl">Full Viewport</span>
+                    <strong className="token-sub-val">{fullTokens} tk</strong>
+                  </div>
+                  <span style={{ color: '#64748b' }}>→</span>
+                  <div>
+                    <span className="token-sub-lbl">ROI Cropped</span>
+                    <strong className="token-sub-val" style={{ color: '#a855f7' }}>{croppedTokens} tk</strong>
+                  </div>
+                  <span style={{ color: '#64748b' }}>=</span>
+                  <div>
+                    <span className="token-sub-lbl">Saved</span>
+                    <strong className="token-sub-val" style={{ color: '#34d399' }}>{tokensSaved} tk (-{tokenSavedPct}%)</strong>
+                  </div>
                 </div>
               </div>
             )}

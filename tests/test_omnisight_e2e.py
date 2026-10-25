@@ -128,5 +128,53 @@ class TestOmniSightE2E(unittest.TestCase):
         self.assertIn("result", active_jobs[job_id])
         self.assertEqual(active_jobs[job_id]["result"]["status"], "repaired")
 
+    def test_06_chaos_scenario_injection(self):
+        """Verifies injecting chaos testing scenarios into test-app."""
+        # Test contrast injection
+        success = self.fixer.inject_bug_scenario("contrast")
+        self.assertTrue(success)
+        content = self.fixer.css_file.read_text(encoding="utf-8")
+        self.assertIn("#1e293b", content)
+
+        # Test touch target injection
+        success = self.fixer.inject_bug_scenario("touch_target")
+        self.assertTrue(success)
+        content = self.fixer.css_file.read_text(encoding="utf-8")
+        self.assertIn("height: 22px", content)
+
+        # Test clean reset
+        success = self.fixer.reset_file_to_clean_state()
+        self.assertTrue(success)
+        content = self.fixer.css_file.read_text(encoding="utf-8")
+        self.assertNotIn("width: 520px", content)
+        self.assertNotIn("height: 22px", content)
+
+    def test_07_multi_device_matrix_audit(self):
+        """Verifies multi-device matrix audit across Mobile, Tablet, and Desktop."""
+        result = self.orchestrator.run_matrix_audit()
+        self.assertIsNotNone(result)
+        self.assertTrue(result.get("is_matrix"))
+        self.assertEqual(len(result.get("viewports_evaluated", [])), 3)
+        self.assertIn("mobile", result.get("matrix_viewports", {}))
+        self.assertIn("tablet", result.get("matrix_viewports", {}))
+        self.assertIn("desktop", result.get("matrix_viewports", {}))
+        self.assertGreaterEqual(result.get("responsive_score", 0), 66)
+
+    def test_08_analytics_and_report_generation(self):
+        """Verifies global analytics and executive report generation."""
+        from backend.storage.db import get_analytics_summary
+        from backend.routes.audit import generate_audit_report
+
+        analytics = get_analytics_summary()
+        self.assertIn("total_audits", analytics)
+        self.assertIn("healing_success_rate", analytics)
+        self.assertGreater(analytics["total_audits"], 0)
+
+        # Verify HTML report generation for the most recent run
+        runs = get_recent_runs(limit=1)
+        self.assertGreater(len(runs), 0)
+        report_response = generate_audit_report(runs[0]["id"], format="html")
+        self.assertIn("OmniSight Visual QA Audit Report", report_response.body.decode("utf-8"))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
