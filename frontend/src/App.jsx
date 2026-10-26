@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import MetricsBar from './components/MetricsBar';
-import ControlBar from './components/ControlBar';
-import VisualDiffInspector from './components/VisualDiffInspector';
-import AgentTimeline from './components/AgentTimeline';
-import DefectCard from './components/DefectCard';
-import PatchViewer from './components/PatchViewer';
+import StagingView from './components/StagingView';
+import ExternalScannerView from './components/ExternalScannerView';
+import HistoryView from './components/HistoryView';
 import PRModal from './components/PRModal';
 import CIWebhookModal from './components/CIWebhookModal';
 import ExportReportModal from './components/ExportReportModal';
-import { History, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 const BACKEND_URL = 'http://127.0.0.1:8000';
 
@@ -69,7 +68,7 @@ export default function App() {
 
   const showBanner = (msg) => {
     setBannerNotice(msg);
-    setTimeout(() => setBannerNotice(null), 4000);
+    setTimeout(() => setBannerNotice(null), 4500);
   };
 
   const handleTriggerAudit = async () => {
@@ -167,6 +166,7 @@ export default function App() {
         onOpenCIModal={() => setIsCIModalOpen(true)}
         onOpenReportModal={() => setIsReportModalOpen(true)}
         hasRunData={Boolean(currentRun)}
+        historyCount={history.length}
       />
 
       <MetricsBar 
@@ -192,99 +192,64 @@ export default function App() {
       )}
 
       <main className="dashboard-main">
-        <ControlBar 
-          viewport={viewport}
-          setViewport={setViewport}
-          targetUrl={targetUrl}
-          setTargetUrl={setTargetUrl}
-          isRunning={isRunning}
-          onTriggerAudit={handleTriggerAudit}
-          onResetBug={handleResetBug}
-          onInjectChaosBug={handleInjectChaosBug}
-          onResetClean={handleResetClean}
-          selectedEngine={selectedEngine}
-          setSelectedEngine={setSelectedEngine}
-        />
-
-        <div className="dashboard-grid">
-          {/* Left Column: Visual Diff Inspector & Unified Diff */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <VisualDiffInspector 
-              runData={currentRun} 
-              backendUrl={BACKEND_URL} 
-            />
-
-            <PatchViewer 
-              patch={currentRun?.patch} 
-              prNumber={currentRun?.pr_number}
-              prUrl={currentRun?.pr_url}
-              runId={currentRun?.id}
-              backendUrl={BACKEND_URL}
-              onOpenPRModal={() => setIsPRModalOpen(true)}
-              canOpenPR={currentRun?.verification_passed}
-            />
-          </div>
-
-          {/* Right Column: Timeline, Diagnostics & History */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <AgentTimeline 
-              timeline={currentRun?.timeline} 
-              isRunning={isRunning} 
-            />
-
-            <DefectCard 
-              defects={currentRun?.defects} 
-              confidenceScore={currentRun?.confidence_score ?? currentRun?.timeline?.find(t => t.step === 'defect_detection')?.details?.confidence}
-              croppedArtifact={currentRun?.cropped_defect_token_artifact || currentRun?.crop_screenshot}
-              engineUsed={currentRun?.engine_used}
-              tokenTelemetry={currentRun?.token_telemetry}
-              backendUrl={BACKEND_URL}
-            />
-
-            {/* Recent Audit History List */}
-            {history.length > 0 && (
-              <div className="dash-card">
-                <div className="dash-card-header">
-                  <div className="card-title-group">
-                    <History size={18} color="#94a3b8" />
-                    <h2>Audit History ({history.length})</h2>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
-                  {history.map((h) => (
-                    <div 
-                      key={h.id}
-                      onClick={() => setCurrentRun(h)}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '10px 14px',
-                        borderRadius: '8px',
-                        background: currentRun?.id === h.id ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.02)',
-                        border: currentRun?.id === h.id ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid var(--border-color)',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{
-                          width: '8px',
-                          height: '8px',
-                          borderRadius: '50%',
-                          background: h.verification_passed ? '#10b981' : '#f59e0b'
-                        }}></span>
-                        <span style={{ fontSize: '0.82rem', fontFamily: 'monospace' }}>{h.id.slice(0, 16)}</span>
-                      </div>
-                      <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                        {h.viewport} • {h.defects_found} defect(s)
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <Routes>
+          <Route 
+            path="/" 
+            element={
+              <StagingView 
+                viewport={viewport}
+                setViewport={setViewport}
+                targetUrl={targetUrl}
+                setTargetUrl={setTargetUrl}
+                isRunning={isRunning}
+                onTriggerAudit={handleTriggerAudit}
+                onResetBug={handleResetBug}
+                onInjectChaosBug={handleInjectChaosBug}
+                onResetClean={handleResetClean}
+                selectedEngine={selectedEngine}
+                setSelectedEngine={setSelectedEngine}
+                currentRun={currentRun}
+                backendUrl={BACKEND_URL}
+                onOpenPRModal={() => setIsPRModalOpen(true)}
+              />
+            } 
+          />
+          <Route 
+            path="/staging" 
+            element={<Navigate to="/" replace />} 
+          />
+          <Route 
+            path="/external" 
+            element={
+              <ExternalScannerView 
+                backendUrl={BACKEND_URL}
+                currentRun={currentRun}
+                setCurrentRun={setCurrentRun}
+                isRunning={isRunning}
+                setIsRunning={setIsRunning}
+                fetchHistory={fetchHistory}
+                fetchAnalytics={fetchAnalytics}
+                showBanner={showBanner}
+                onOpenPRModal={() => setIsPRModalOpen(true)}
+              />
+            } 
+          />
+          <Route 
+            path="/history" 
+            element={
+              <HistoryView 
+                history={history}
+                setCurrentRun={setCurrentRun}
+                backendUrl={BACKEND_URL}
+                onOpenReportModal={() => setIsReportModalOpen(true)}
+              />
+            } 
+          />
+          <Route 
+            path="*" 
+            element={<Navigate to="/" replace />} 
+          />
+        </Routes>
       </main>
 
       {/* GitHub PR Modal */}

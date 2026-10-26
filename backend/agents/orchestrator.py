@@ -48,20 +48,20 @@ class AgenticOrchestrator:
         log_step("plan", f"Initializing headless browser navigation for viewport: {viewport_key}")
         
         # Determine if we should set the default bug
-        # If auto_reset_bug is explicitly True, reset
-        # If auto_reset_bug is None, check if checkout.css has any anomaly. If clean and on mobile, set default bug.
-        if auto_reset_bug is True:
-            self.fixer.reset_file_to_buggy_state()
-        elif auto_reset_bug is None and viewport_key == "mobile":
-            try:
-                css_txt = self.fixer.css_file.read_text(encoding="utf-8")
-                # If neither 520px, nor small button, nor promo overlay, nor low contrast is present, inject default bug
-                has_any_bug = ("width: 520px" in css_txt or "520px !important" in css_txt or "height: 22px" in css_txt or 
-                               "display: flex !important;" in css_txt or "color: #1e293b" in css_txt)
-                if not has_any_bug:
-                    self.fixer.reset_file_to_buggy_state()
-            except Exception:
-                pass
+        is_external_target = bool(target_url and str(target_url).strip() and not str(target_url).strip().startswith("file://") and "test-app" not in str(target_url))
+        
+        if not is_external_target:
+            if auto_reset_bug is True:
+                self.fixer.reset_file_to_buggy_state()
+            elif auto_reset_bug is None and viewport_key == "mobile":
+                try:
+                    css_txt = self.fixer.css_file.read_text(encoding="utf-8")
+                    has_any_bug = ("width: 520px" in css_txt or "520px !important" in css_txt or "height: 22px" in css_txt or 
+                                   "display: flex !important;" in css_txt or "color: #1e293b" in css_txt)
+                    if not has_any_bug:
+                        self.fixer.reset_file_to_buggy_state()
+                except Exception:
+                    pass
         
         before_res = self.navigator.capture_viewport(
             viewport_key=viewport_key,
@@ -105,6 +105,9 @@ class AgenticOrchestrator:
             result = {
                 "id": run_id,
                 "viewport": viewport_key,
+                "target_url": target_url or "http://127.0.0.1:8000/test-app/index.html",
+                "page_title": before_dom.get("pageTitle", "Target Page"),
+                "is_external": is_external_target,
                 "status": "passed",
                 "defects_found": 0,
                 "defects": [],
@@ -134,7 +137,12 @@ class AgenticOrchestrator:
         for attempt in range(1, max_retries + 1):
             log_step("synthesize_patch", f"[Attempt {attempt}/{max_retries}] Synthesizing responsive patch and unified git diff for {primary_defect.get('type')}")
             
-            patch_info = self.fixer.create_unified_diff(run_id, primary_defect)
+            patch_info = self.fixer.create_unified_diff(
+                run_id=run_id,
+                defect=primary_defect,
+                is_external=is_external_target,
+                target_url=target_url
+            )
             injected_css = patch_info.get("css_injected_rule", "")
 
             log_step(
@@ -168,8 +176,8 @@ class AgenticOrchestrator:
 
             if verification_passed:
                 log_step("verification", f"Verification Passed on attempt {attempt}! Defect resolved.", status="success", details=eval_res)
-                # Apply fix permanently to test-app/checkout.css for persistent demo
-                if patch_info.get("repaired_css"):
+                # Apply fix permanently to test-app/checkout.css for persistent demo only if testing local checkout
+                if not is_external_target and patch_info.get("repaired_css"):
                     self.fixer.apply_patch_to_file(patch_info["repaired_css"])
                 break
             else:
@@ -210,6 +218,9 @@ class AgenticOrchestrator:
         run_record = {
             "id": run_id,
             "viewport": viewport_key,
+            "target_url": target_url or "http://127.0.0.1:8000/test-app/index.html",
+            "page_title": before_dom.get("pageTitle", "Target Page"),
+            "is_external": is_external_target,
             "status": "repaired" if verification_passed else "failed",
             "defects_found": len(defects),
             "defects": defects,
@@ -255,7 +266,9 @@ class AgenticOrchestrator:
         healed_count = 0
         
         # Ensure initial bug is set for matrix demo if testing default checkout
-        self.fixer.reset_file_to_buggy_state()
+        is_matrix_external = bool(target_url and str(target_url).strip() and not str(target_url).strip().startswith("file://") and "test-app" not in str(target_url))
+        if not is_matrix_external:
+            self.fixer.reset_file_to_buggy_state()
 
         for vp in viewports:
             run_res = self.run_self_healing_cycle(
@@ -276,6 +289,9 @@ class AgenticOrchestrator:
         matrix_record = {
             "id": matrix_id,
             "is_matrix": True,
+            "target_url": target_url or "http://127.0.0.1:8000/test-app/index.html",
+            "page_title": mobile_run.get("page_title", "Target Page"),
+            "is_external": is_matrix_external,
             "created_at": time.time(),
             "matrix_viewports": runs,
             "overall_status": "repaired" if total_defects > 0 and healed_count == len(viewports) else ("passed" if total_defects == 0 else "action_required"),

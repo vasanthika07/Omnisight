@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GitPullRequest, Code2, Copy, Check, Download, Terminal, Play, Sparkles } from 'lucide-react';
 
 export default function PatchViewer({ 
@@ -16,24 +16,18 @@ export default function PatchViewer({
   const [sandboxTesting, setSandboxTesting] = useState(false);
   const [sandboxResult, setSandboxResult] = useState(null);
 
-  if (!patch || !patch.unified_diff) {
-    return (
-      <div className="dash-card">
-        <div className="dash-card-header">
-          <div className="card-title-group">
-            <Code2 size={18} color="#8b5cf6" />
-            <h2>Unified Git Diff & Patch Synthesizer</h2>
-          </div>
-        </div>
-        <div className="empty-state" style={{ padding: '24px 12px' }}>
-          <Code2 size={32} />
-          <p>No patch synthesized yet. Run an audit to generate self-healing code.</p>
-        </div>
-      </div>
-    );
-  }
+  // Expose sandbox test runner globally for automated RPA/programmatic execution
+  useEffect(() => {
+    window.__omnisight_run_sandbox_test = handleRunSandboxTest;
+    window.__omnisight_set_sandbox_css = setCustomCss;
+    return () => {
+      delete window.__omnisight_run_sandbox_test;
+      delete window.__omnisight_set_sandbox_css;
+    };
+  }, [customCss, backendUrl]);
 
   const handleCopy = () => {
+    if (!patch?.unified_diff) return;
     navigator.clipboard.writeText(patch.unified_diff);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -42,7 +36,7 @@ export default function PatchViewer({
   const handleDownloadPatch = () => {
     if (runId) {
       window.open(`${backendUrl}/api/download-patch/${runId}`, '_blank');
-    } else {
+    } else if (patch?.unified_diff) {
       const blob = new Blob([patch.unified_diff], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -73,15 +67,22 @@ export default function PatchViewer({
     }
   };
 
-  // Expose sandbox test runner globally for automated RPA/programmatic execution
-  useEffect(() => {
-    window.__omnisight_run_sandbox_test = handleRunSandboxTest;
-    window.__omnisight_set_sandbox_css = setCustomCss;
-    return () => {
-      delete window.__omnisight_run_sandbox_test;
-      delete window.__omnisight_set_sandbox_css;
-    };
-  }, [customCss, backendUrl]);
+  if (!patch || !patch.unified_diff) {
+    return (
+      <div className="dash-card">
+        <div className="dash-card-header">
+          <div className="card-title-group">
+            <Code2 size={18} color="#8b5cf6" />
+            <h2>Unified Git Diff & Patch Synthesizer</h2>
+          </div>
+        </div>
+        <div className="empty-state" style={{ padding: '24px 12px' }}>
+          <Code2 size={32} />
+          <p>No patch synthesized yet. Run an audit to generate self-healing code.</p>
+        </div>
+      </div>
+    );
+  }
 
   const diffLines = patch.unified_diff.split('\n');
 

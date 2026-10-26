@@ -45,7 +45,9 @@ def init_db():
         ("engine_used", "TEXT"),
         ("confidence_score", "REAL"),
         ("token_telemetry", "TEXT"),
-        ("pixel_diff_stats", "TEXT")
+        ("pixel_diff_stats", "TEXT"),
+        ("target_url", "TEXT"),
+        ("page_title", "TEXT")
     ]:
         if col_name not in existing_cols:
             try:
@@ -96,14 +98,16 @@ def save_audit_run(run_data: Dict[str, Any]) -> str:
     confidence = run_data.get("confidence_score")
     token_telem = json.dumps(run_data.get("token_telemetry", {}))
     pixel_stats = json.dumps(run_data.get("pixel_diff_stats", {}))
+    target_url = run_data.get("target_url", "")
+    page_title = run_data.get("page_title", "")
 
     cursor.execute("""
     INSERT OR REPLACE INTO audit_runs (
         id, created_at, status, viewport, before_screenshot, after_screenshot,
         diff_screenshot, defects_found, fix_applied, verification_passed,
         pr_number, pr_url, summary, timeline, crop_screenshot, engine_used, confidence_score,
-        token_telemetry, pixel_diff_stats
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        token_telemetry, pixel_diff_stats, target_url, page_title
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         run_data["id"],
         run_data.get("created_at", datetime.now().isoformat()),
@@ -123,7 +127,9 @@ def save_audit_run(run_data: Dict[str, Any]) -> str:
         engine,
         confidence,
         token_telem,
-        pixel_stats
+        pixel_stats,
+        target_url,
+        page_title
     ))
     
     # Save defects

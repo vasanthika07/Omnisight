@@ -1,5 +1,6 @@
 import React from 'react';
-import { Eye, RefreshCw, Play, GitBranch, FileText } from 'lucide-react';
+import { Eye, RefreshCw, Play, GitBranch, FileText, Globe, ShoppingCart, History } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
 
 export default function Navbar({ 
   onResetBug, 
@@ -8,7 +9,8 @@ export default function Navbar({
   engineInfo, 
   onOpenCIModal, 
   onOpenReportModal,
-  hasRunData 
+  hasRunData,
+  historyCount
 }) {
   return (
     <header className="top-nav">
@@ -21,6 +23,43 @@ export default function Navbar({
           <span className="tagline">Multimodal UI Self-Healing & Autonomous RPA QA</span>
         </div>
       </div>
+
+      {/* Navigation Routes */}
+      <nav className="nav-routes" aria-label="Main Navigation">
+        <NavLink 
+          to="/" 
+          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          id="nav-link-staging"
+          title="Internal Staging Demo Store & Chaos Anomaly Studio"
+        >
+          <ShoppingCart size={15} />
+          <span>Staging Store</span>
+        </NavLink>
+
+        <NavLink 
+          to="/external" 
+          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          id="nav-link-external"
+          title="Universal Scanner: Take any website from external sources to audit"
+        >
+          <Globe size={15} />
+          <span>External Scanner</span>
+          <span className="nav-link-badge live">Live</span>
+        </NavLink>
+
+        <NavLink 
+          to="/history" 
+          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          id="nav-link-history"
+          title="View all past audit runs and verification records"
+        >
+          <History size={15} />
+          <span>History</span>
+          {typeof historyCount === 'number' && historyCount > 0 && (
+            <span className="nav-link-badge">{historyCount}</span>
+          )}
+        </NavLink>
+      </nav>
 
       <div className="nav-controls">
         <div className="status-badge">

@@ -18,8 +18,31 @@ class BrowserNavigator:
             return self.get_default_test_app_url()
         url = str(target_url).strip()
         if not (url.startswith("http://") or url.startswith("https://") or url.startswith("file://")):
-            url = f"http://{url}"
+            # Default to https:// for external domains
+            url = f"https://{url}"
         return url
+
+    def _navigate_page(self, page, url: str):
+        """
+        Navigates to URL with robust timeout and fallback for external websites.
+        """
+        is_local = url.startswith("file://") or "127.0.0.1" in url or "localhost" in url
+        if is_local:
+            page.goto(url, wait_until="networkidle", timeout=10000)
+            page.wait_for_timeout(250)
+            return
+
+        # External website: try load event first with 18s timeout
+        try:
+            page.goto(url, wait_until="load", timeout=18000)
+            page.wait_for_timeout(600)
+        except Exception as e:
+            try:
+                # Fallback to domcontentloaded if external trackers/ads delay network idle/load
+                page.goto(url, wait_until="domcontentloaded", timeout=12000)
+                page.wait_for_timeout(500)
+            except Exception as inner_e:
+                print(f"[OmniSight Navigator] External site navigation warning for {url}: {inner_e}")
 
     def capture_viewport(
         self,
@@ -41,13 +64,11 @@ class BrowserNavigator:
             browser = p.chromium.launch(headless=self.headless)
             context = browser.new_context(
                 viewport={"width": vp_config["width"], "height": vp_config["height"]},
-                user_agent="Mozilla/5.0 (OmniSight Multimodal QA Agent 1.0)"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OmniSight/1.0",
+                ignore_https_errors=True
             )
             page = context.new_page()
-            page.goto(url, wait_until="networkidle")
-            
-            # Allow animations or fonts to settle
-            page.wait_for_timeout(350)
+            self._navigate_page(page, url)
             
             # Extract DOM metadata and spatial metrics
             dom_metrics = extract_dom_and_metrics(page)
@@ -105,10 +126,11 @@ class BrowserNavigator:
             browser = p.chromium.launch(headless=self.headless)
             context = browser.new_context(
                 viewport={"width": vp_config["width"], "height": vp_config["height"]},
-                user_agent="Mozilla/5.0 (OmniSight Multimodal QA Agent 1.0)"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OmniSight/1.0",
+                ignore_https_errors=True
             )
             page = context.new_page()
-            page.goto(url, wait_until="networkidle")
+            self._navigate_page(page, url)
             
             # Inject candidate CSS patch directly into document head
             page.evaluate("""(css) => {
@@ -118,7 +140,7 @@ class BrowserNavigator:
                 document.head.appendChild(styleEl);
             }""", css_patch)
             
-            page.wait_for_timeout(300)
+            page.wait_for_timeout(350)
             
             # Extract verified DOM metrics
             new_dom_metrics = extract_dom_and_metrics(page)

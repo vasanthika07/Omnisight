@@ -64,12 +64,58 @@ class FixGenerator:
     def create_unified_diff(
         self,
         run_id: str,
-        defect: Dict[str, Any]
+        defect: Dict[str, Any],
+        is_external: bool = False,
+        target_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generates a standard Git unified diff patch for developer code review.
-        Dynamically applies targeted replacements based on the defect type.
+        Supports both local repository files and external target websites.
         """
+        if is_external:
+            element = defect.get("element", "target-element")
+            proposed_rules = defect.get(
+                "proposed_fix",
+                "width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;"
+            )
+            clean_rules = "\n  ".join([r.strip() for r in proposed_rules.strip().split("\n") if r.strip()])
+            injected_rule = f"{element} {{\n  {clean_rules}\n}}"
+            
+            domain_name = "external-site"
+            if target_url:
+                try:
+                    from urllib.parse import urlparse
+                    domain_name = urlparse(target_url).netloc or "external-site"
+                except Exception:
+                    domain_name = "external-site"
+            
+            virtual_path = f"styles/{domain_name}.css"
+            orig_snippet = f"/* External Source: {target_url or 'Target Site'} */\n{element} {{\n  /* Original styling causing {defect.get('type', 'layout anomaly')} */\n}}\n"
+            repaired_snippet = f"/* External Source: {target_url or 'Target Site'} */\n/* OmniSight Autonomous Self-Healing Patch */\n{element} {{\n  {clean_rules}\n}}\n"
+            
+            diff = difflib.unified_diff(
+                orig_snippet.splitlines(keepends=True),
+                repaired_snippet.splitlines(keepends=True),
+                fromfile=f"a/{virtual_path}",
+                tofile=f"b/{virtual_path}",
+                n=3
+            )
+            unified_diff_str = "".join(diff)
+            
+            patch_file = PATCHES_DIR / f"{run_id}.diff"
+            patch_file.write_text(unified_diff_str, encoding="utf-8")
+            
+            return {
+                "patch_file": str(patch_file),
+                "file_path": virtual_path,
+                "target_selector": element,
+                "original_css": orig_snippet,
+                "repaired_css": repaired_snippet,
+                "unified_diff": unified_diff_str,
+                "css_injected_rule": injected_rule,
+                "is_external": True
+            }
+
         if not self.css_file.exists():
             return {
                 "error": f"Target stylesheet {self.css_file} does not exist"

@@ -121,7 +121,7 @@ export default function ControlBar({
           value={targetUrl}
           onChange={(e) => setTargetUrl(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Target Staging URL (defaults to Infotact Demo Checkout Store)"
+          placeholder="Target Website URL (e.g. news.ycombinator.com, stripe.com, or leave empty for Demo Checkout)"
           disabled={isRunning}
           className="control-bar-input"
           id="staging-url-input"
