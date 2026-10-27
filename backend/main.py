@@ -13,6 +13,7 @@ from backend.config import (
 )
 from backend.routes.audit import router as audit_router
 from backend.routes.webhook import router as webhook_router
+from backend.routes.devices import router as devices_router
 
 app = FastAPI(
     title="OmniSight: Multimodal UI Self-Healing & RPA Agent API",
@@ -36,6 +37,7 @@ app.mount("/test-app", StaticFiles(directory=str(TEST_APP_DIR), html=True), name
 # Include routers
 app.include_router(audit_router)
 app.include_router(webhook_router)
+app.include_router(devices_router)
 
 @app.get("/")
 def root():

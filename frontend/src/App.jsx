@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import MetricsBar from './components/MetricsBar';
 import StagingView from './components/StagingView';
 import ExternalScannerView from './components/ExternalScannerView';
+import DeviceLabView from './components/DeviceLabView';
 import HistoryView from './components/HistoryView';
 import PRModal from './components/PRModal';
 import CIWebhookModal from './components/CIWebhookModal';
@@ -196,6 +197,25 @@ export default function App() {
           <Route 
             path="/" 
             element={
+              <DeviceLabView 
+                backendUrl={BACKEND_URL}
+                showBanner={showBanner}
+                onOpenPRModal={() => setIsPRModalOpen(true)}
+                onOpenReportModal={() => setIsReportModalOpen(true)}
+                currentRun={currentRun}
+                setCurrentRun={setCurrentRun}
+                fetchHistory={fetchHistory}
+                fetchAnalytics={fetchAnalytics}
+              />
+            } 
+          />
+          <Route 
+            path="/devices" 
+            element={<Navigate to="/" replace />} 
+          />
+          <Route 
+            path="/staging" 
+            element={
               <StagingView 
                 viewport={viewport}
                 setViewport={setViewport}
@@ -213,10 +233,6 @@ export default function App() {
                 onOpenPRModal={() => setIsPRModalOpen(true)}
               />
             } 
-          />
-          <Route 
-            path="/staging" 
-            element={<Navigate to="/" replace />} 
           />
           <Route 
             path="/external" 

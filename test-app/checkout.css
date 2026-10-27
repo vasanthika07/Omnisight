@@ -315,9 +315,8 @@ body {
    ========================================================================== */
 .checkout-action-btn {
   /* BUGGY_LINE_START */
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
+  width: 520px !important;
+  max-width: none !important;
   /* BUGGY_LINE_END */
   padding: 16px 24px;
   background: var(--accent-gradient);

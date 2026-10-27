@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, RefreshCw, Play, GitBranch, FileText, Globe, ShoppingCart, History } from 'lucide-react';
+import { Eye, RefreshCw, Play, GitBranch, FileText, Globe, ShoppingCart, History, Smartphone } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 export default function Navbar({ 
@@ -29,11 +29,13 @@ export default function Navbar({
         <NavLink 
           to="/" 
           className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-          id="nav-link-staging"
-          title="Internal Staging Demo Store & Chaos Anomaly Studio"
+          id="nav-link-devices"
+          title="Universal Any-Device Testing & Dynamic Continuous Monitor"
+          end
         >
-          <ShoppingCart size={15} />
-          <span>Staging Store</span>
+          <Smartphone size={15} />
+          <span>Any-Device Lab & Monitor</span>
+          <span className="nav-link-badge live">Universal</span>
         </NavLink>
 
         <NavLink 
@@ -45,6 +47,16 @@ export default function Navbar({
           <Globe size={15} />
           <span>External Scanner</span>
           <span className="nav-link-badge live">Live</span>
+        </NavLink>
+
+        <NavLink 
+          to="/staging" 
+          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          id="nav-link-staging"
+          title="Internal Staging Demo Store & Chaos Anomaly Studio"
+        >
+          <ShoppingCart size={15} />
+          <span>Staging Store</span>
         </NavLink>
 
         <NavLink 

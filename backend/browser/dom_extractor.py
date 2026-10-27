@@ -157,6 +157,7 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
         } catch (e) {}
 
         // Detect overlapping elements (e.g. floating promo banner obscuring button)
+        // Detect overlapping elements (e.g. floating promo banner obscuring button)
         const overlaps = [];
         for (let i = 0; i < elementsInfo.length; i++) {
             for (let j = i + 1; j < elementsInfo.length; j++) {
@@ -188,6 +189,61 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
                 }
             }
         }
+
+        // Viewport Meta Tag Audit
+        const vpMetaEl = document.querySelector('meta[name="viewport"]');
+        let metaInfo = {
+            hasViewportMeta: !!vpMetaEl,
+            content: vpMetaEl ? vpMetaEl.getAttribute('content') : '',
+            userScalable: true,
+            initialScale: "1.0"
+        };
+        if (vpMetaEl && vpMetaEl.getAttribute('content')) {
+            const contentStr = vpMetaEl.getAttribute('content').toLowerCase();
+            metaInfo.userScalable = !contentStr.includes('user-scalable=no') && !contentStr.includes('maximum-scale=1.0');
+            const matchScale = contentStr.match(/initial-scale=([0-9.]+)/);
+            if (matchScale) metaInfo.initialScale = matchScale[1];
+        }
+
+        // Media items audit
+        const mediaItems = [];
+        try {
+            const imgs = document.querySelectorAll('img');
+            imgs.forEach((img, idx) => {
+                if (idx < 25) {
+                    const r = img.getBoundingClientRect();
+                    const comp = window.getComputedStyle(img);
+                    const isBroken = img.complete && img.naturalWidth === 0 && img.src && !img.src.startsWith('data:');
+                    mediaItems.push({
+                        src: (img.src || '').slice(0, 100),
+                        width: Math.round(r.width),
+                        height: Math.round(r.height),
+                        naturalWidth: img.naturalWidth || 0,
+                        naturalHeight: img.naturalHeight || 0,
+                        isBroken: isBroken,
+                        hasFluidConstraint: comp.maxWidth !== 'none' || comp.width === '100%'
+                    });
+                }
+            });
+        } catch (e) {}
+
+        // Sticky Elements Total Height (for mobile landscape check)
+        let stickyHeight = 0;
+        try {
+            const fixedEls = document.querySelectorAll('header, nav, [style*="position: fixed"], [style*="position: sticky"]');
+            fixedEls.forEach(el => {
+                const r = el.getBoundingClientRect();
+                const comp = window.getComputedStyle(el);
+                if ((comp.position === 'fixed' || comp.position === 'sticky') && r.top < 30 && r.height > 20) {
+                    stickyHeight += r.height;
+                }
+            });
+        } catch (e) {}
+
+        // Container max width for ultrawide check
+        const mainEl = document.querySelector('main, .checkout-wrapper, .container, #root, #app') || document.body;
+        const mainComp = window.getComputedStyle(mainEl);
+        const bodyMaxWidth = mainComp.maxWidth || 'none';
         
         return {
             viewport: { width: viewportWidth, height: viewportHeight },
@@ -196,7 +252,11 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
             pageTitle: document.title || window.location.hostname || 'Target Page',
             currentUrl: window.location.href,
             elements: elementsInfo,
-            overlaps: overlaps
+            overlaps: overlaps,
+            meta_info: metaInfo,
+            media_items: mediaItems,
+            stickyElementsTotalHeight: Math.round(stickyHeight),
+            bodyMaxWidth: bodyMaxWidth
         };
     }""")
     
