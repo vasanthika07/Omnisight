@@ -80,23 +80,50 @@ class AgenticOrchestrator:
         )
 
         # -------------------------------------------------------------
-        # 2. MULTIMODAL VLM INSPECTION
+        # 2. MULTIMODAL VLM & DYNAMIC EDGE CASES INSPECTION
         # -------------------------------------------------------------
         log_step("vision_audit", f"Feeding screenshot and DOM tree into Multimodal Vision Engine ({engine or 'auto'})...")
         analysis = self.vision.analyze(before_path, before_dom, viewport_name=viewport_key, engine=engine)
         
         defects = analysis.get("defects", [])
-        defects_found = len(defects) > 0
         token_telemetry = analysis.get("token_telemetry", {})
         
+        # Evaluate 11 Universal Dynamic Edge Cases (responsiveness, accessibility, spatial clipping)
+        from backend.devices.edge_case_checker import DynamicEdgeCaseChecker
+        from backend.config import VIEWPORTS
+        vp_config = VIEWPORTS.get(viewport_key, VIEWPORTS["mobile"])
+        device_spec = {
+            "name": f"{viewport_key.title()} Viewport",
+            "width": vp_config["width"],
+            "height": vp_config["height"],
+            "is_mobile": viewport_key != "desktop",
+            "has_touch": viewport_key != "desktop",
+            "orientation": "portrait"
+        }
+        edge_report = DynamicEdgeCaseChecker().evaluate(before_dom, device_spec)
+        compliance_score = edge_report.get("compliance_score", 100.0)
+        grade = edge_report.get("grade", "A+ (Compliant)")
+        checklist = edge_report.get("checklist", [])
+
+        # Integrate and deduplicate any edge defects
+        existing_elements = {d.get("element") for d in defects}
+        for ed in edge_report.get("defects", []):
+            if ed.get("element") not in existing_elements:
+                defects.append(ed)
+                existing_elements.add(ed.get("element"))
+
+        defects_found = len(defects) > 0
+
         log_step(
             "defect_detection",
-            f"VLM Analysis completed. Found {len(defects)} defect(s). Engine: {analysis.get('engine_used')}",
+            f"VLM Analysis completed. Found {len(defects)} defect(s). Score: {compliance_score}% ({grade}). Engine: {analysis.get('engine_used')}",
             status="completed" if defects_found else "warning",
             details={
                 "defects": defects, 
                 "confidence": analysis.get("visual_confidence_score"),
-                "token_savings": f"-{token_telemetry.get('token_reduction_pct', 80)}% tokens"
+                "token_savings": f"-{token_telemetry.get('token_reduction_pct', 80)}% tokens",
+                "compliance_score": compliance_score,
+                "grade": grade
             }
         )
 
@@ -116,8 +143,12 @@ class AgenticOrchestrator:
                 "before_screenshot": before_screenshot,
                 "engine_used": analysis.get("engine_used"),
                 "confidence_score": analysis.get("visual_confidence_score", 1.0),
+                "compliance_score": compliance_score,
+                "grade": grade,
+                "checklist": checklist,
+                "dom_metrics": before_dom,
                 "token_telemetry": token_telemetry,
-                "summary": f"No visual defects detected on target page ({viewport_key} viewport).",
+                "summary": f"No visual defects detected on target page ({viewport_key} viewport). Compliance score: {compliance_score}%.",
                 "timeline": timeline
             }
             save_audit_run(result)
@@ -182,8 +213,36 @@ class AgenticOrchestrator:
                 break
             else:
                 log_step("verification", f"Verification attempt {attempt} failed: {eval_res.get('status_message')}. Retrying...", status="warning")
-                # Mutate defect fix strategy for retry
-                primary_defect["proposed_fix"] = "width: 100% !important; max-width: 100% !important; margin: 0 auto !important; box-sizing: border-box !important;"
+                # Mutate defect fix strategy intelligently based on defect type for retry
+                def_type = primary_defect.get("type", "viewport_overflow")
+                if def_type == "touch_target_too_small":
+                    primary_defect["proposed_fix"] = (
+                        "display: inline-block !important;\n"
+                        "min-height: 48px !important;\n"
+                        "min-width: 48px !important;\n"
+                        "line-height: 48px !important;\n"
+                        "padding: 12px 20px !important;\n"
+                        "box-sizing: border-box !important;"
+                    )
+                elif def_type == "contrast_violation":
+                    primary_defect["proposed_fix"] = (
+                        "color: #ffffff !important;\n"
+                        "background-color: #0f172a !important;\n"
+                        "opacity: 1 !important;"
+                    )
+                elif def_type == "element_obscured_overlap":
+                    primary_defect["proposed_fix"] = (
+                        "display: none !important;\n"
+                        "z-index: -1 !important;\n"
+                        "pointer-events: none !important;"
+                    )
+                else:
+                    primary_defect["proposed_fix"] = (
+                        "width: 100% !important;\n"
+                        "max-width: 100% !important;\n"
+                        "margin: 0 auto !important;\n"
+                        "box-sizing: border-box !important;"
+                    )
 
         # -------------------------------------------------------------
         # 4. VISUAL PIXEL DIFF & PR ARTIFACTS
@@ -234,10 +293,14 @@ class AgenticOrchestrator:
             "cropped_defect_token_artifact": analysis.get("cropped_defect_token_artifact"),
             "engine_used": analysis.get("engine_used"),
             "confidence_score": analysis.get("visual_confidence_score", 0.99),
+            "compliance_score": compliance_score,
+            "grade": grade,
+            "checklist": checklist,
+            "dom_metrics": before_dom,
             "token_telemetry": token_telemetry,
             "summary": (
                 f"Autonomous self-healing completed: Repaired {primary_defect.get('element')} "
-                f"with responsive patch. Visual verification passed."
+                f"with responsive patch. Visual verification passed. Compliance score: {compliance_score}% ({grade})."
             ),
             "patch": patch_info,
             "pr_payload": pr_payload,
@@ -314,6 +377,9 @@ class AgenticOrchestrator:
             "timeline": mobile_run.get("timeline"),
             "engine_used": mobile_run.get("engine_used"),
             "token_telemetry": mobile_run.get("token_telemetry"),
+            "compliance_score": mobile_run.get("compliance_score", responsive_score),
+            "grade": mobile_run.get("grade", "A+ (Compliant)"),
+            "checklist": mobile_run.get("checklist", []),
             "summary": f"Multi-Device Matrix Audit completed: {responsive_score}% responsive score across Mobile, Tablet, and Desktop."
         }
 

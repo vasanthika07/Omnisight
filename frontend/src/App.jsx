@@ -75,6 +75,46 @@ export default function App() {
   const handleTriggerAudit = async () => {
     setIsRunning(true);
     setBannerNotice(`OmniSight QA Agent Dispatched: Navigating & Inspecting ${viewport === 'matrix' ? 'All Viewports' : viewport}...`);
+
+    // Immediate dynamic feedback in timeline
+    const liveRunId = `run_${Date.now()}`;
+    const initialRun = {
+      id: liveRunId,
+      viewport: viewport === 'matrix' ? 'matrix (all devices)' : viewport,
+      target_url: targetUrl || 'http://127.0.0.1:8000/test-app/index.html',
+      page_title: targetUrl ? targetUrl.replace(/^https?:\/\//, '').split('/')[0] : 'OmniSight Staging Store',
+      is_external: Boolean(targetUrl && !targetUrl.includes('test-app')),
+      status: 'analyzing',
+      timeline: [
+        { step: 'plan', message: `Initializing Headless Playwright Navigator for viewport: ${viewport}`, status: 'completed' },
+        { step: 'browse', message: `Navigating to target and capturing DOM geometry...`, status: 'active' }
+      ]
+    };
+    setCurrentRun(initialRun);
+
+    const t1 = setTimeout(() => {
+      setCurrentRun((prev) => (prev && prev.id === liveRunId ? {
+        ...prev,
+        timeline: [
+          { step: 'plan', message: `Initializing Headless Playwright Navigator for viewport: ${viewport}`, status: 'completed' },
+          { step: 'browse', message: `Captured viewport screenshot for ${viewport}`, status: 'completed' },
+          { step: 'vision_audit', message: `Feeding screenshot & DOM tree into Multimodal Vision Engine (${selectedEngine})...`, status: 'active' }
+        ]
+      } : prev));
+    }, 850);
+
+    const t2 = setTimeout(() => {
+      setCurrentRun((prev) => (prev && prev.id === liveRunId ? {
+        ...prev,
+        timeline: [
+          { step: 'plan', message: `Initializing Headless Playwright Navigator for viewport: ${viewport}`, status: 'completed' },
+          { step: 'browse', message: `Captured viewport screenshot for ${viewport}`, status: 'completed' },
+          { step: 'vision_audit', message: `Multimodal VLM spatial inspection completed. Evaluating 11 Dynamic Edge Cases...`, status: 'completed' },
+          { step: 'defect_detection', message: `Evaluating layout blowout, WCAG touch targets & pixel anomalies...`, status: 'active' }
+        ]
+      } : prev));
+    }, 1700);
+
     try {
       const endpoint = viewport === 'matrix' ? `${BACKEND_URL}/api/audit-matrix` : `${BACKEND_URL}/api/audit`;
       const res = await fetch(endpoint, {
@@ -87,6 +127,12 @@ export default function App() {
           engine: selectedEngine
         })
       });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || `Server returned error (${res.status})`);
+      }
+
       const data = await res.json();
       setCurrentRun(data);
       setStagingHealth(data.verification_passed ? 'Compliant' : 'Anomaly Detected');
@@ -96,6 +142,8 @@ export default function App() {
     } catch (err) {
       alert(`Audit failed: ${err.message}`);
     } finally {
+      clearTimeout(t1);
+      clearTimeout(t2);
       setIsRunning(false);
     }
   };

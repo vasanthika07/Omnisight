@@ -54,13 +54,13 @@ class BrowserNavigator:
 
         # External website: prioritize domcontentloaded for high performance and immunity against tracker delays
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=10000)
+            page.goto(url, wait_until="domcontentloaded", timeout=12000)
             page.wait_for_timeout(400)
         except Exception as e:
             try:
-                # Fallback to load or commit if page requires full lifecycle
-                page.goto(url, wait_until="load", timeout=12000)
-                page.wait_for_timeout(400)
+                # Fallback to commit if page has heavy delayed trackers
+                page.goto(url, wait_until="commit", timeout=8000)
+                page.wait_for_timeout(600)
             except Exception as inner_e:
                 print(f"[OmniSight Navigator] External site navigation warning for {url}: {inner_e}")
 
@@ -152,12 +152,13 @@ class BrowserNavigator:
             page = context.new_page()
             self._navigate_page(page, url)
             
-            # Inject candidate CSS patch directly into document head
+            # Inject candidate CSS patch safely into document head, body, or root
             page.evaluate("""(css) => {
                 const styleEl = document.createElement('style');
                 styleEl.id = 'omnisight-patch-injection';
                 styleEl.textContent = css;
-                document.head.appendChild(styleEl);
+                const target = document.head || document.body || document.documentElement;
+                if (target) target.appendChild(styleEl);
             }""", css_patch)
             
             page.wait_for_timeout(350)

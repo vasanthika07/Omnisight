@@ -180,7 +180,7 @@ class DynamicEdgeCaseChecker:
                         "required_minimum": "44×44px (WCAG AAA: 48×48px)"
                     },
                     "explanation": f"Touch target '{target['selector']}' measures {target['width']}×{target['height']}px, failing WCAG 2.5.5 touch target minimum (44×44px) on touchscreens.",
-                    "remediation": "input, button, a { min-height: 44px !important; box-sizing: border-box !important; }"
+                    "remediation": "input, button, a { display: inline-block !important; min-height: 44px !important; min-width: 44px !important; line-height: 44px !important; box-sizing: border-box !important; }"
                 })
                 score -= 15.0
                 defects.append({
@@ -189,7 +189,7 @@ class DynamicEdgeCaseChecker:
                     "element": "input, button" if target["selector"].startswith("#") or "input" in target["selector"] else target["selector"],
                     "description": f"Touch target '{target['selector']}' on {device_config.get('name')} is {target['width']}×{target['height']}px. Violates WCAG 2.5.5 minimum 44×44px standard.",
                     "bounding_box": target["rect"],
-                    "proposed_fix": "min-height: 44px !important;\nbox-sizing: border-box !important;"
+                    "proposed_fix": "display: inline-block !important;\nmin-height: 44px !important;\nmin-width: 44px !important;\nline-height: 44px !important;\nbox-sizing: border-box !important;"
                 })
             else:
                 checklist.append({

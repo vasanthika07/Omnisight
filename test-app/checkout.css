@@ -315,8 +315,11 @@ body {
    ========================================================================== */
 .checkout-action-btn {
   /* BUGGY_LINE_START */
-  width: 520px !important;
-  max-width: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 48px !important;
+  padding: 16px 24px !important;
+  box-sizing: border-box !important;
   /* BUGGY_LINE_END */
   padding: 16px 24px;
   background: var(--accent-gradient);

@@ -315,9 +315,12 @@ Return ONLY valid JSON matching this exact structure:
                         ),
                         "bounding_box": rect,
                         "proposed_fix": (
+                            "display: inline-block !important;\n"
                             "min-height: 48px !important;\n"
-                            "min-width: 120px !important;\n"
-                            "padding: 14px 24px !important;\n"
+                            "min-width: 48px !important;\n"
+                            "line-height: 48px !important;\n"
+                            "padding: 12px 20px !important;\n"
+                            "box-sizing: border-box !important;\n"
                             "font-size: 0.95rem !important;"
                         )
                     })
