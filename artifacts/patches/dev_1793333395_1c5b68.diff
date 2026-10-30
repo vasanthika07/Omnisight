@@ -1,0 +1,10 @@
+--- a/styles/example.com.css
++++ b/styles/example.com.css
+@@ -1,4 +1,6 @@
+ /* External Source: https://example.com */
++/* OmniSight Autonomous Self-Healing Patch */
+ body > a:nth-child(9) {
+-  /* Original styling causing touch_target_too_small */
++  min-height: 44px !important;
++  box-sizing: border-box !important;
+ }

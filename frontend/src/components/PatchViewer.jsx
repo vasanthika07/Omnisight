@@ -8,6 +8,7 @@ export default function PatchViewer({
   prNumber, 
   prUrl, 
   runId,
+  targetUrl,
   backendUrl = 'http://127.0.0.1:8000' 
 }) {
   const [copied, setCopied] = useState(false);
@@ -24,7 +25,7 @@ export default function PatchViewer({
       delete window.__omnisight_run_sandbox_test;
       delete window.__omnisight_set_sandbox_css;
     };
-  }, [customCss, backendUrl]);
+  }, [customCss, backendUrl, targetUrl]);
 
   const handleCopy = () => {
     if (!patch?.unified_diff) return;
@@ -55,7 +56,8 @@ export default function PatchViewer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           css: customCss,
-          viewport: 'mobile'
+          viewport: 'mobile',
+          target_url: targetUrl || null
         })
       });
       const data = await res.json();

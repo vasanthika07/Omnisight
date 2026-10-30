@@ -148,5 +148,44 @@ class TestOmniSightAnyDevice(unittest.TestCase):
         updated_mon = monitor_manager.get_monitor(default_mon["id"])
         self.assertIsNotNone(updated_mon.get("last_score"))
 
+    def test_06_external_website_device_audit(self):
+        """Verifies dynamic edge case inspection, compliance scoring, and auto-heal on an external website."""
+        from backend.routes.devices import audit_any_device, DeviceAuditRequest
+
+        req = DeviceAuditRequest(
+            device_id="iphone_15_pro",
+            target_url="https://example.com",
+            auto_heal=True
+        )
+        res = audit_any_device(req)
+        self.assertIsNotNone(res)
+        self.assertTrue(res.get("is_external"))
+        self.assertEqual(res.get("target_url"), "https://example.com")
+        self.assertIn("compliance_score", res)
+        self.assertIn("grade", res)
+        self.assertEqual(len(res.get("checklist", [])), 11, "All 11 universal edge cases should be evaluated")
+        self.assertIsNotNone(res.get("before_screenshot"))
+
+        # If defects were found on external site (e.g. small touch targets), verify patch generation
+        if res.get("defects_found", 0) > 0:
+            self.assertIsNotNone(res.get("patch"))
+            self.assertTrue(res.get("verification_passed"))
+
+    def test_07_external_website_multi_device_fleet(self):
+        """Verifies multi-device fleet audit on an external website across phones and tablets."""
+        from backend.routes.devices import audit_multi_device_fleet, MultiDeviceAuditRequest
+
+        req = MultiDeviceAuditRequest(
+            device_ids=["iphone_15_pro", "ipad_air"],
+            target_url="https://example.com"
+        )
+        res = audit_multi_device_fleet(req)
+        self.assertIsNotNone(res)
+        self.assertEqual(res.get("target_url"), "https://example.com")
+        self.assertEqual(res.get("devices_audited"), 2)
+        self.assertIn("fleet_compliance_score", res)
+        self.assertIn("iphone_15_pro", res.get("fleet_results", {}))
+        self.assertIn("ipad_air", res.get("fleet_results", {}))
+
 if __name__ == "__main__":
     unittest.main()

@@ -465,6 +465,7 @@ export default function ExternalScannerView({
             prNumber={currentRun?.pr_number}
             prUrl={currentRun?.pr_url}
             runId={currentRun?.id}
+            targetUrl={currentRun?.target_url || getFullUrl()}
             backendUrl={backendUrl}
             onOpenPRModal={onOpenPRModal}
             canOpenPR={currentRun?.verification_passed}

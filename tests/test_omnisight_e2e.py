@@ -176,5 +176,62 @@ class TestOmniSightE2E(unittest.TestCase):
         report_response = generate_audit_report(runs[0]["id"], format="html")
         self.assertIn("OmniSight Visual QA Audit Report", report_response.body.decode("utf-8"))
 
+    def test_09_external_website_reachability_and_validation(self):
+        """Verifies external website URL reachability, SSL detection, and domain metadata parsing."""
+        from backend.routes.audit import check_external_url, URLCheckRequest
+
+        # Test valid HTTPS external URL
+        res1 = check_external_url(URLCheckRequest(url="https://example.com"))
+        self.assertTrue(res1.get("reachable"))
+        self.assertEqual(res1.get("domain"), "example.com")
+        self.assertTrue(res1.get("is_ssl"))
+        self.assertIn("example.com", res1.get("url"))
+
+        # Test URL without protocol prefix (auto-prepends https://)
+        res2 = check_external_url(URLCheckRequest(url="news.ycombinator.com"))
+        self.assertTrue(res2.get("reachable"))
+        self.assertEqual(res2.get("domain"), "news.ycombinator.com")
+        self.assertTrue(res2.get("is_ssl"))
+        self.assertTrue(res2.get("url").startswith("https://"))
+
+    def test_10_external_website_multimodal_audit_and_virtual_patch(self):
+        """Verifies full multimodal visual audit, DOM extraction, and virtual unified diff on external website."""
+        ext_url = "https://example.com"
+        result = self.orchestrator.run_self_healing_cycle(
+            target_url=ext_url,
+            viewport_key="mobile",
+            max_retries=1
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result.get("target_url"), ext_url)
+        self.assertTrue(result.get("is_external"))
+        self.assertIsNotNone(result.get("before_screenshot"))
+        self.assertIn("Example", result.get("page_title", ""))
+
+        # Verify virtual unified diff generation for external website
+        dummy_defect = {
+            "type": "touch_target_too_small",
+            "severity": "high",
+            "element": "body > a",
+            "proposed_fix": "min-height: 44px !important;\nbox-sizing: border-box !important;"
+        }
+        diff_obj = self.fixer.create_unified_diff(
+            run_id="test_ext_diff",
+            defect=dummy_defect,
+            is_external=True,
+            target_url=ext_url
+        )
+        self.assertIsNotNone(diff_obj)
+        self.assertTrue(diff_obj.get("is_external"))
+        self.assertIn("--- a/styles/example.com.css", diff_obj.get("unified_diff", ""))
+        self.assertIn("+++ b/styles/example.com.css", diff_obj.get("unified_diff", ""))
+        self.assertIn("min-height: 44px !important;", diff_obj.get("unified_diff", ""))
+
+        # Verify DB persistence of external run
+        db_run = get_run_by_id(result["id"])
+        self.assertIsNotNone(db_run)
+        self.assertEqual(db_run.get("target_url"), ext_url)
+        self.assertTrue(db_run.get("is_external"))
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

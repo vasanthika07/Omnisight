@@ -50,6 +50,7 @@ export default function StagingView({
             prNumber={currentRun?.pr_number}
             prUrl={currentRun?.pr_url}
             runId={currentRun?.id}
+            targetUrl={targetUrl || currentRun?.target_url}
             backendUrl={backendUrl}
             onOpenPRModal={onOpenPRModal}
             canOpenPR={currentRun?.verification_passed}

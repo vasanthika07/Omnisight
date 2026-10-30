@@ -52,15 +52,15 @@ class BrowserNavigator:
                     return
                 raise e
 
-        # External website: try load event first with 18s timeout
+        # External website: prioritize domcontentloaded for high performance and immunity against tracker delays
         try:
-            page.goto(url, wait_until="load", timeout=18000)
-            page.wait_for_timeout(600)
+            page.goto(url, wait_until="domcontentloaded", timeout=10000)
+            page.wait_for_timeout(400)
         except Exception as e:
             try:
-                # Fallback to domcontentloaded if external trackers/ads delay network idle/load
-                page.goto(url, wait_until="domcontentloaded", timeout=12000)
-                page.wait_for_timeout(500)
+                # Fallback to load or commit if page requires full lifecycle
+                page.goto(url, wait_until="load", timeout=12000)
+                page.wait_for_timeout(400)
             except Exception as inner_e:
                 print(f"[OmniSight Navigator] External site navigation warning for {url}: {inner_e}")
 
