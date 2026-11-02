@@ -18,10 +18,21 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Ensure project root is on sys.path
+# Resolve repository root
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+# Auto-switch to virtual environment (.venv) if current interpreter lacks dependencies
+venv_python = ROOT / ".venv" / ("Scripts" if os.name == "nt" else "bin") / ("python.exe" if os.name == "nt" else "python")
+if venv_python.exists():
+    try:
+        import playwright
+        import fastapi
+    except ImportError:
+        import subprocess
+        cmd = [str(venv_python), str(Path(__file__).resolve())] + sys.argv[1:]
+        sys.exit(subprocess.call(cmd))
 
 from backend.agents.orchestrator import AgenticOrchestrator
 from backend.storage.db import get_analytics_summary
@@ -162,8 +173,16 @@ def run_audit(viewport: str = "mobile", url: Optional[str] = None, engine: Optio
     # 1. DISCOVERY & BROWSER NAVIGATION
     print_stage_header(1, 5, "Discovery & DOM Acquisition", "Spinning up isolated Playwright Chromium instance & harvesting DOM metrics")
     
-    # 2. RUN SELF HEALING OR MATRIX AUDIT
-    if viewport.lower() in ["all", "matrix"]:
+    # 2. RUN SELF HEALING, MATRIX AUDIT, OR DEVICE AUDIT
+    from backend.devices.registry import get_device_by_id
+    dev_config = get_device_by_id(viewport.lower())
+
+    if dev_config:
+        from backend.routes.devices import audit_any_device, DeviceAuditRequest
+        req = DeviceAuditRequest(device_id=dev_config["id"], target_url=url, auto_heal=True)
+        result = audit_any_device(req)
+        viewport_label = f"{dev_config['name']} ({dev_config['width']}×{dev_config['height']})"
+    elif viewport.lower() in ["all", "matrix"]:
         result = orchestrator.run_matrix_audit(target_url=url, engine=engine)
         viewport_label = "Multi-Device Matrix (Mobile + Tablet + Desktop)"
     else:
@@ -261,7 +280,11 @@ def run_audit(viewport: str = "mobile", url: Optional[str] = None, engine: Optio
 
 def main():
     parser = argparse.ArgumentParser(description="OmniSight Autonomous Audit & Self-Healing CLI")
-    parser.add_argument("--viewport", "-v", default="mobile", choices=["mobile", "tablet", "desktop", "all", "matrix"], help="Target viewport tier")
+    parser.add_argument(
+        "--viewport", "-v",
+        default="mobile",
+        help="Target viewport or device preset (mobile, tablet, desktop, matrix, or any device preset like iphone_15_pro, galaxy_s24_ultra)"
+    )
     parser.add_argument("--url", "-u", default=None, help="Target URL (defaults to local staging store)")
     parser.add_argument("--engine", "-e", default=None, choices=["builtin", "gemini", "openai"], help="VLM engine")
     parser.add_argument("--json", action="store_true", help="Output full JSON payload")

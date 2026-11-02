@@ -380,6 +380,13 @@ class AgenticOrchestrator:
             "compliance_score": mobile_run.get("compliance_score", responsive_score),
             "grade": mobile_run.get("grade", "A+ (Compliant)"),
             "checklist": mobile_run.get("checklist", []),
+            "pr_payload": mobile_run.get("pr_payload") or {
+                "title": f"fix(ui): responsive matrix alignment across viewports ({matrix_id[:12]})",
+                "branch": f"omnisight/fix-matrix-{matrix_id[:12]}",
+                "patch_file": mobile_run.get("patch", {}).get("patch_file") if mobile_run.get("patch") else None,
+                "viewport": "matrix",
+                "defects_resolved": total_defects
+            },
             "summary": f"Multi-Device Matrix Audit completed: {responsive_score}% responsive score across Mobile, Tablet, and Desktop."
         }
 

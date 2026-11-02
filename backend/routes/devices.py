@@ -144,9 +144,13 @@ def audit_any_device(req: DeviceAuditRequest):
             )
             pixel_stats = verifier.last_diff_stats
 
+        status_val = "repaired" if verification_passed and len(defects) > 0 else ("passed" if len(defects) == 0 else "action_required")
+
         # Build response record
         audit_record = {
             "id": run_id,
+            "status": status_val,
+            "viewport": f"{device_config.get('name')} ({device_config.get('width')}x{device_config.get('height')})",
             "device": device_config,
             "target_url": req.target_url or "http://127.0.0.1:8000/test-app/index.html",
             "page_title": capture_res["dom_metrics"].get("pageTitle", "Target Page"),
@@ -163,6 +167,13 @@ def audit_any_device(req: DeviceAuditRequest):
             "diff_screenshot": diff_screenshot,
             "pixel_diff_stats": pixel_stats,
             "patch": patch_info,
+            "pr_payload": {
+                "title": f"fix(ui): dynamic edge compliance patch for {device_config.get('name')}",
+                "branch": f"omnisight/fix-device-{run_id}",
+                "patch_file": patch_info.get("patch_file") if patch_info else None,
+                "viewport": device_config.get("name"),
+                "defects_resolved": len(defects)
+            } if patch_info else None,
             "summary": f"Audited {device_config.get('name')}: {score}% compliance score. Found {len(defects)} edge-case defect(s)."
         }
 
@@ -171,8 +182,8 @@ def audit_any_device(req: DeviceAuditRequest):
             save_audit_run({
                 "id": run_id,
                 "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "status": "repaired" if verification_passed and len(defects) > 0 else ("passed" if len(defects) == 0 else "action_required"),
-                "viewport": f"{device_config.get('name')} ({device_config.get('width')}x{device_config.get('height')})",
+                "status": status_val,
+                "viewport": audit_record["viewport"],
                 "before_screenshot": before_screenshot,
                 "after_screenshot": after_screenshot,
                 "diff_screenshot": diff_screenshot,

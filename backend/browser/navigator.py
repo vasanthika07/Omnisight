@@ -311,7 +311,8 @@ class BrowserNavigator:
                 const styleEl = document.createElement('style');
                 styleEl.id = 'omnisight-device-patch';
                 styleEl.textContent = css;
-                document.head.appendChild(styleEl);
+                const target = document.head || document.body || document.documentElement;
+                if (target) target.appendChild(styleEl);
             }""", css_patch)
 
             page.wait_for_timeout(350)

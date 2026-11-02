@@ -1,0 +1,11 @@
+--- a/test-app/checkout.css
++++ b/test-app/checkout.css
+@@ -317,6 +317,8 @@
+   /* BUGGY_LINE_START */
+   width: 100% !important;
+   max-width: 100% !important;
++  min-height: 48px !important;
++  padding: 16px 24px !important;
+   box-sizing: border-box !important;
+   /* BUGGY_LINE_END */
+   padding: 16px 24px;
