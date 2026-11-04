@@ -158,6 +158,8 @@ def audit_any_device(req: DeviceAuditRequest):
             "compliance_score": score,
             "grade": grade,
             "checklist": checklist,
+            "performance_levels": capture_res.get("performance_levels", []),
+            "weak_areas": capture_res.get("weak_areas", []),
             "defects_found": len(defects),
             "defects": defects,
             "fix_applied": req.auto_heal and len(defects) > 0,

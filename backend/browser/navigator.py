@@ -266,6 +266,8 @@ class BrowserNavigator:
             "compliance_score": edge_case_report["compliance_score"],
             "grade": edge_case_report["grade"],
             "checklist": edge_case_report["checklist"],
+            "performance_levels": edge_case_report.get("performance_levels", []),
+            "weak_areas": edge_case_report.get("weak_areas", []),
             "defects": edge_case_report["defects"]
         }
 

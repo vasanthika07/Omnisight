@@ -71,12 +71,34 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
                         const overflowsLeft = rect.left < -3;
                         const overflowsWidth = rect.width > viewportWidth + 3;
                         
+                        const rawText = (el.innerText || el.textContent || '').trim().slice(0, 80);
+                        let accessibleLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.getAttribute('title') || el.getAttribute('alt') || el.getAttribute('placeholder') || null;
+                        if (!accessibleLabel && el.id) {
+                            const lbl = document.querySelector('label[for="' + el.id + '"]');
+                            if (lbl) accessibleLabel = (lbl.innerText || lbl.textContent || '').trim();
+                        }
+                        if (!accessibleLabel && el.closest) {
+                            const pLbl = el.closest('label');
+                            if (pLbl) accessibleLabel = (pLbl.innerText || pLbl.textContent || '').trim();
+                        }
+                        if (!accessibleLabel && el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit' || el.type === 'reset')) {
+                            accessibleLabel = el.value || null;
+                        }
+                        const ariaLabel = accessibleLabel;
+                        const hasAccessibleName = Boolean(rawText || ariaLabel);
+                        const isIconOnly = (el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button') && !rawText && Boolean(el.querySelector('svg, img, i, span'));
+                        const isInteractive = el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.getAttribute('role') === 'button';
+
                         elementsInfo.push({
                             selector: getSafeSelector(el),
                             tagName: el.tagName.toLowerCase(),
                             id: el.id || null,
                             className: typeof el.className === 'string' ? el.className : null,
-                            text: (el.innerText || el.textContent || '').trim().slice(0, 80),
+                            text: rawText,
+                            ariaLabel: ariaLabel,
+                            hasAccessibleName: hasAccessibleName,
+                            isIconOnly: isIconOnly,
+                            isInteractive: isInteractive,
                             rect: {
                                 x: Math.round(rect.x),
                                 y: Math.round(rect.y),
@@ -120,12 +142,34 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
                     if (rect.right > viewportWidth + 4 || rect.width > viewportWidth + 4 || rect.left < -4) {
                         visitedElements.add(el);
                         const computed = window.getComputedStyle(el);
+                        const rawText = (el.innerText || el.textContent || '').trim().slice(0, 80);
+                        let accessibleLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.getAttribute('title') || el.getAttribute('alt') || el.getAttribute('placeholder') || null;
+                        if (!accessibleLabel && el.id) {
+                            const lbl = document.querySelector('label[for="' + el.id + '"]');
+                            if (lbl) accessibleLabel = (lbl.innerText || lbl.textContent || '').trim();
+                        }
+                        if (!accessibleLabel && el.closest) {
+                            const pLbl = el.closest('label');
+                            if (pLbl) accessibleLabel = (pLbl.innerText || pLbl.textContent || '').trim();
+                        }
+                        if (!accessibleLabel && el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit' || el.type === 'reset')) {
+                            accessibleLabel = el.value || null;
+                        }
+                        const ariaLabel = accessibleLabel;
+                        const hasAccessibleName = Boolean(rawText || ariaLabel);
+                        const isIconOnly = (el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button') && !rawText && Boolean(el.querySelector('svg, img, i, span'));
+                        const isInteractive = el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.getAttribute('role') === 'button';
+
                         elementsInfo.push({
                             selector: getSafeSelector(el),
                             tagName: el.tagName.toLowerCase(),
                             id: el.id || null,
                             className: typeof el.className === 'string' ? el.className : null,
-                            text: (el.innerText || el.textContent || '').trim().slice(0, 80),
+                            text: rawText,
+                            ariaLabel: ariaLabel,
+                            hasAccessibleName: hasAccessibleName,
+                            isIconOnly: isIconOnly,
+                            isInteractive: isInteractive,
                             rect: {
                                 x: Math.round(rect.x),
                                 y: Math.round(rect.y),
@@ -248,6 +292,7 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
         return {
             viewport: { width: viewportWidth, height: viewportHeight },
             documentScrollWidth: document.documentElement.scrollWidth,
+            documentScrollHeight: document.documentElement.scrollHeight,
             hasHorizontalScrollbar: document.documentElement.scrollWidth > viewportWidth + 3,
             pageTitle: document.title || window.location.hostname || 'Target Page',
             currentUrl: window.location.href,
@@ -256,7 +301,9 @@ def extract_dom_and_metrics(page: Page) -> Dict[str, Any]:
             meta_info: metaInfo,
             media_items: mediaItems,
             stickyElementsTotalHeight: Math.round(stickyHeight),
-            bodyMaxWidth: bodyMaxWidth
+            bodyMaxWidth: bodyMaxWidth,
+            bodyOverflow: document.body ? window.getComputedStyle(document.body).overflow : 'visible',
+            has100vhContainer: Boolean(document.querySelector('[style*="100vh"]'))
         };
     }""")
     

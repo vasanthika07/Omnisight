@@ -85,7 +85,7 @@ def print_banner():
     div = "=" * 80
     print(c(div, Palette.CYAN))
     print(c("   OMNISIGHT AUTONOMOUS MULTIMODAL AUDIT & SELF-HEALING ENGINE", Palette.BRIGHT_CYAN + Palette.BOLD))
-    print(c("   Visual QA • 11-Point Dynamic Edge Radar • Closed-Loop Unified Diff Patching", Palette.DIM))
+    print(c("   Visual QA • 16-Point Dynamic Edge & Rare Cases Radar • Closed-Loop Unified Diff Patching", Palette.DIM))
     print(c(div, Palette.CYAN))
 
 def print_stage_header(stage_num: int, total_stages: int, title: str, description: str):
@@ -95,6 +95,64 @@ def print_stage_header(stage_num: int, total_stages: int, title: str, descriptio
 
 def print_metric_badge(label: str, value: str, color: str = Palette.CYAN):
     print(f"  {c('•', Palette.DIM)} {label.ljust(26)}: {c(value, color + Palette.BOLD)}")
+
+def render_bar(score: float, width: int = 20) -> str:
+    """Renders an ANSI colored horizontal progress bar."""
+    filled = int(round((max(0.0, min(100.0, score)) / 100.0) * width))
+    empty = max(0, width - filled)
+    bar_str = "█" * filled + "░" * empty
+    color = Palette.BRIGHT_GREEN if score >= 85 else (Palette.BRIGHT_YELLOW if score >= 60 else Palette.BRIGHT_RED)
+    return f"[{c(bar_str, color)}] {score:5.1f}%"
+
+def print_performance_levels(levels: list):
+    """Renders visual performance bars across the 5 evaluation levels."""
+    if not levels:
+        return
+    print(f"\n  {c('┌── Performance Breakdown by Evaluation Level ───────────────────────────────────────────┐', Palette.DIM)}")
+    for lvl in levels:
+        num = lvl.get("level", 1)
+        name = lvl.get("name", f"Level {num}")
+        score = lvl.get("score", 100.0)
+        grade = lvl.get("grade", "A+")
+        passed = lvl.get("passed_checks", 0)
+        total = lvl.get("total_checks", 0)
+        status = lvl.get("status", "PASS")
+
+        grade_color = Palette.BRIGHT_GREEN if grade.startswith("A") else (Palette.BRIGHT_YELLOW if grade in ["B", "C"] else Palette.BRIGHT_RED)
+        status_tag = c(f"[{status}]", Palette.BRIGHT_GREEN if status == "PASS" else (Palette.BRIGHT_YELLOW if status == "WARN" else Palette.BRIGHT_RED))
+        
+        bar = render_bar(score, width=20)
+        grade_badge = c(f"[{grade.center(3)}]", grade_color + Palette.BOLD)
+        ratio_str = c(f"({passed}/{total} passed)", Palette.DIM)
+        
+        label_cell = name[:36].ljust(36)
+        print(f"  {c('│', Palette.DIM)} {c(label_cell, Palette.BOLD)} {bar} {grade_badge} {status_tag} {ratio_str}")
+    print(f"  {c('└────────────────────────────────────────────────────────────────────────────────────────┘', Palette.DIM)}")
+
+def print_weak_areas(weak_areas: list, target_url: str):
+    """Highlights weak areas needing improvement with exact CSS remediations."""
+    if not weak_areas:
+        print(f"\n  {c('✓ OPTIMAL HEALTH:', Palette.BRIGHT_GREEN + Palette.BOLD)} Zero weak areas detected on {c(target_url, Palette.CYAN)}. All responsive & accessibility tiers compliant.")
+        return
+
+    print(f"\n  {c('⚠ ACTION CENTER: WEAK AREAS NEEDING IMPROVEMENT', Palette.BRIGHT_YELLOW + Palette.BOLD)} ({len(weak_areas)} item(s) flagged on {c(target_url, Palette.CYAN)})")
+    
+    for idx, wa in enumerate(weak_areas, 1):
+        sev = wa.get("severity", "HIGH").upper()
+        sev_color = Palette.BRIGHT_RED if sev == "CRITICAL" else (Palette.BRIGHT_YELLOW if sev == "HIGH" else Palette.CYAN)
+        name = wa.get("name", "Weakness")
+        lvl = wa.get("level_name", "General")
+        expl = wa.get("explanation", "")
+        remed = wa.get("remediation", "")
+        gain = wa.get("projected_gain", "+15% score")
+        
+        print(f"\n    {c(f'[{sev}]', sev_color + Palette.BOLD)} {c(f'Weak Area #{idx}: {name}', Palette.BRIGHT_WHITE + Palette.BOLD)}")
+        print(f"      {c('Category / Level:', Palette.DIM)} {lvl}")
+        print(f"      {c('Observation:', Palette.DIM)}    {expl}")
+        print(f"      {c('Score Impact:', Palette.DIM)}   {c(gain, Palette.BRIGHT_GREEN + Palette.BOLD)}")
+        if remed:
+            clean_remed = "\n        ".join([line.strip() for line in remed.strip().splitlines() if line.strip()])
+            print(f"      {c('Remediation Prescription:', Palette.DIM)}\n        {c(clean_remed, Palette.GREEN)}")
 
 def print_edge_case_checklist(checklist: list):
     """Renders the 11-point dynamic compliance checklist as a structured terminal table."""
@@ -107,7 +165,7 @@ def print_edge_case_checklist(checklist: list):
     border_bot = f"  └{'─'*col1_w}┴{'─'*col2_w}┴{'─'*col3_w}┘"
 
     print(f"\n{c(border_top, Palette.DIM)}")
-    header_col1 = "11-POINT DYNAMIC EDGE CHECK".ljust(col1_w - 2)
+    header_col1 = "16-POINT DYNAMIC EDGE CHECK".ljust(col1_w - 2)
     header_col2 = "STATUS".ljust(col2_w - 2)
     header_col3 = "AUDIT OBSERVATION / METRIC".ljust(col3_w - 2)
     print(f"  {c('│', Palette.DIM)} {c(header_col1, Palette.BOLD)} {c('│', Palette.DIM)} {c(header_col2, Palette.BOLD)} {c('│', Palette.DIM)} {c(header_col3, Palette.BOLD)} {c('│', Palette.DIM)}")
@@ -213,15 +271,27 @@ def run_audit(viewport: str = "mobile", url: Optional[str] = None, engine: Optio
     else:
         print(f"  {c('✓ PERFECT COMPLIANCE:', Palette.BRIGHT_GREEN + Palette.BOLD)} Zero visual defects detected. Viewport complies with design system specifications.")
 
-    # 4. 11-POINT DYNAMIC COMPLIANCE RADAR
-    print_stage_header(3, 5, "11-Point Dynamic Edge-Case Radar", "Comprehensive audit across accessibility, extreme aspect ratios, touch geometries, and layout integrity")
+    # 4. MULTI-LEVEL PERFORMANCE & DYNAMIC EDGE RADAR
+    print_stage_header(3, 5, "Multi-Level Performance & Dynamic Edge Radar", "Auditing performance bars across 5 levels and 16 accessibility and responsive edge cases")
     checklist = result.get("checklist", [])
+    performance_levels = result.get("performance_levels", [])
+    weak_areas = result.get("weak_areas", [])
     compliance_score = result.get("compliance_score", 100.0)
     grade = result.get("grade", "A+ (Compliant)")
+    target_site_label = url or "Local Staging App (test-app/index.html)"
     
-    print_metric_badge("Compliance Score", f"{compliance_score}%", Palette.BRIGHT_GREEN if compliance_score >= 85 else Palette.BRIGHT_RED)
+    print_metric_badge("Audited Target Site", target_site_label, Palette.BRIGHT_CYAN)
+    print_metric_badge("Overall Compliance Score", f"{compliance_score}%", Palette.BRIGHT_GREEN if compliance_score >= 85 else Palette.BRIGHT_RED)
     print_metric_badge("Certification Grade", grade, Palette.BRIGHT_GREEN if "A" in grade else Palette.BRIGHT_YELLOW)
     
+    # 1. Display Performance Bars by Level
+    if performance_levels:
+        print_performance_levels(performance_levels)
+
+    # 2. Display Actionable Weak Areas Needing Improvement
+    print_weak_areas(weak_areas, target_site_label)
+
+    # 3. Detailed 11-Point Checklist Table
     if checklist:
         print_edge_case_checklist(checklist)
 

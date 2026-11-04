@@ -381,3 +381,17 @@ body {
   }
 }
 
+
+
+/* OmniSight Self-Healing Patch */
+#first-name {
+  /* Add aria-label attribute to HTML */
+  /* <button aria-label='Action Description'> */
+}
+
+
+/* OmniSight Self-Healing Patch */
+#first-name {
+  /* Add aria-label attribute to HTML */
+  /* <button aria-label='Action Description'> */
+}

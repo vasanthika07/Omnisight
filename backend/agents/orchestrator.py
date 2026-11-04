@@ -104,6 +104,8 @@ class AgenticOrchestrator:
         compliance_score = edge_report.get("compliance_score", 100.0)
         grade = edge_report.get("grade", "A+ (Compliant)")
         checklist = edge_report.get("checklist", [])
+        performance_levels = edge_report.get("performance_levels", [])
+        weak_areas = edge_report.get("weak_areas", [])
 
         # Integrate and deduplicate any edge defects
         existing_elements = {d.get("element") for d in defects}
@@ -146,6 +148,8 @@ class AgenticOrchestrator:
                 "compliance_score": compliance_score,
                 "grade": grade,
                 "checklist": checklist,
+                "performance_levels": performance_levels,
+                "weak_areas": weak_areas,
                 "dom_metrics": before_dom,
                 "token_telemetry": token_telemetry,
                 "summary": f"No visual defects detected on target page ({viewport_key} viewport). Compliance score: {compliance_score}%.",
@@ -296,6 +300,8 @@ class AgenticOrchestrator:
             "compliance_score": compliance_score,
             "grade": grade,
             "checklist": checklist,
+            "performance_levels": performance_levels,
+            "weak_areas": weak_areas,
             "dom_metrics": before_dom,
             "token_telemetry": token_telemetry,
             "summary": (
@@ -380,6 +386,8 @@ class AgenticOrchestrator:
             "compliance_score": mobile_run.get("compliance_score", responsive_score),
             "grade": mobile_run.get("grade", "A+ (Compliant)"),
             "checklist": mobile_run.get("checklist", []),
+            "performance_levels": mobile_run.get("performance_levels", []),
+            "weak_areas": mobile_run.get("weak_areas", []),
             "pr_payload": mobile_run.get("pr_payload") or {
                 "title": f"fix(ui): responsive matrix alignment across viewports ({matrix_id[:12]})",
                 "branch": f"omnisight/fix-matrix-{matrix_id[:12]}",

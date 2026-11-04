@@ -57,7 +57,7 @@ export default function VisualDiffInspector({ runData, backendUrl = 'http://127.
           <Layers size={18} color="#6366f1" />
           <h2>Visual Diff & Evidence Inspector</h2>
           <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-            ({runData.viewport.toUpperCase()} • {runData.defects_found === 0 ? 'PASSED (ZERO DEFECTS)' : (runData.verification_passed ? 'HEALED & VERIFIED' : 'ACTION REQUIRED')})
+            ({(runData.viewport || 'mobile').toUpperCase()} • {runData.defects_found === 0 ? 'PASSED (ZERO DEFECTS)' : (runData.verification_passed ? 'HEALED & VERIFIED' : 'ACTION REQUIRED')})
           </span>
           {diffStats.diff_percentage !== undefined && diffStats.diff_percentage > 0 && (
             <span className="pill-diff-stats">

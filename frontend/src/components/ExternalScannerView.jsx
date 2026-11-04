@@ -31,6 +31,7 @@ import VisualDiffInspector from './VisualDiffInspector';
 import AgentTimeline from './AgentTimeline';
 import DefectCard from './DefectCard';
 import PatchViewer from './PatchViewer';
+import PerformanceLevelBreakdown from './PerformanceLevelBreakdown';
 
 const PRESET_SOURCES = [
   { label: 'Example.com', url: 'https://example.com', icon: '🌐' },
@@ -552,6 +553,15 @@ export default function ExternalScannerView({
             </div>
           </div>
         </>
+      )}
+
+      {/* Multi-Level Performance Breakdown & Weak Areas for the Given Website */}
+      {currentRun && (
+        <PerformanceLevelBreakdown
+          runData={currentRun}
+          targetUrl={currentRun.target_url || getFullUrl()}
+          title={`Performance Level Radar & Action Center (${currentRun.target_url || getFullUrl()})`}
+        />
       )}
 
       {/* Main Analysis & Inspection Grid */}

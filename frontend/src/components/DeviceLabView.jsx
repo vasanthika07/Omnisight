@@ -35,6 +35,7 @@ import {
   GitPullRequest,
   Copy
 } from 'lucide-react';
+import PerformanceLevelBreakdown from './PerformanceLevelBreakdown';
 
 const PRESET_URLS = [
   { label: 'Staging Store (Default)', url: 'http://127.0.0.1:8000/test-app/index.html', icon: '🛒' },
@@ -799,6 +800,13 @@ export default function DeviceLabView({
                   </div>
                 </div>
               </section>
+
+              {/* Multi-Level Performance Breakdown & Weak Areas */}
+              <PerformanceLevelBreakdown 
+                runData={auditResult}
+                targetUrl={auditResult.target_url || urlInput}
+                title={`${auditResult.device?.name || 'Device'} Performance Breakdown by Level`}
+              />
 
               {/* Grid: 11 Dynamic Edge Cases Checklist */}
               <section className="edge-cases-radar-section">

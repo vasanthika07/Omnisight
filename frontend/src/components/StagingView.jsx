@@ -4,6 +4,7 @@ import VisualDiffInspector from './VisualDiffInspector';
 import AgentTimeline from './AgentTimeline';
 import DefectCard from './DefectCard';
 import PatchViewer from './PatchViewer';
+import PerformanceLevelBreakdown from './PerformanceLevelBreakdown';
 
 export default function StagingView({
   viewport,
@@ -36,6 +37,14 @@ export default function StagingView({
         selectedEngine={selectedEngine}
         setSelectedEngine={setSelectedEngine}
       />
+
+      {currentRun && (
+        <PerformanceLevelBreakdown 
+          runData={currentRun}
+          targetUrl={targetUrl || currentRun?.target_url || "Local Staging App (test-app/index.html)"}
+          title="Performance Breakdown by Evaluation Level"
+        />
+      )}
 
       <div className="dashboard-grid">
         {/* Left Column: Visual Diff Inspector & Unified Diff */}

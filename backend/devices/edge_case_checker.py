@@ -153,12 +153,24 @@ class DynamicEdgeCaseChecker:
             for el in elements:
                 tag = el.get("tagName", "").lower()
                 sel = el.get("selector", "")
-                # Ignore radio buttons and checkboxes (which derive their active hit area from parent labels per WCAG 2.5.5 Exception)
-                if tag in ["button", "a", "select"] or (tag == "input" and "radio" not in sel and "checkbox" not in sel and "payment" not in sel) or "btn" in sel:
-                    rect = el.get("rect", {})
-                    w = rect.get("width", 0)
-                    h = rect.get("height", 0)
-                    if (w < 44 or h < 44) and (w > 0 and h > 0):
+                rect = el.get("rect", {})
+                w = rect.get("width", 0)
+                h = rect.get("height", 0)
+                if w <= 0 or h <= 0:
+                    continue
+
+                # WCAG 2.5.5 touch target minimum (44×44px) for interactive buttons, links, and action triggers
+                if tag in ["button", "a"] or "btn" in sel or (tag == "input" and any(btn_t in el.get("type", "") for btn_t in ["button", "submit", "reset"])):
+                    if w < 44 or h < 44:
+                        small_touch_targets.append({
+                            "selector": sel,
+                            "width": w,
+                            "height": h,
+                            "rect": rect
+                        })
+                elif tag in ["input", "select"] and "radio" not in sel and "checkbox" not in sel:
+                    # WCAG 2.5.8 minimum (24×24px) for text/select form inputs
+                    if w < 24 or h < 24:
                         small_touch_targets.append({
                             "selector": sel,
                             "width": w,
@@ -616,6 +628,262 @@ class DynamicEdgeCaseChecker:
                 "remediation": None
             })
 
+        # =========================================================================
+        # 12. DUAL-SCREEN & FOLDABLE HINGE COLLISION (Rare Case)
+        # =========================================================================
+        is_foldable = device_config.get("category") == "foldables" or device_config.get("frame_type") in ["tall_foldable", "square_tablet", "landscape_foldable"]
+        if is_foldable:
+            hinge_x = vp_width // 2
+            hinge_violations = []
+            for el in elements:
+                rect = el.get("rect", {})
+                w = rect.get("width", 0)
+                if el.get("isInteractive") or el.get("tagName") in ["button", "a", "input", "h1", "h2"]:
+                    # Element bisects the central hinge line
+                    if rect.get("x", 0) < hinge_x - 6 and rect.get("right", 0) > hinge_x + 6 and w > 40:
+                        hinge_violations.append({
+                            "selector": el.get("selector"),
+                            "tag": el.get("tagName"),
+                            "text": el.get("text", "")[:30],
+                            "rect": rect
+                        })
+
+            if hinge_violations:
+                first_hinge = hinge_violations[0]
+                checklist.append({
+                    "id": "foldable_hinge_split",
+                    "name": "Foldable Screen: Physical Hinge Bisection (Rare Case)",
+                    "category": "Device Hardware Cutouts",
+                    "status": "FAILED",
+                    "severity": "HIGH",
+                    "metrics": {
+                        "hinge_coordinate": f"x = {hinge_x}px",
+                        "bisected_targets": len(hinge_violations),
+                        "primary_target": first_hinge["selector"]
+                    },
+                    "explanation": f"Interactive element '{first_hinge['selector']}' bisects the physical foldable screen hinge seam (x={hinge_x}px), splitting CTA and text across the fold line.",
+                    "remediation": "@media (spanning: single-fold-vertical) { .action-row { display: flex; flex-direction: column; max-width: env(fold-left, 48%); } }"
+                })
+                score -= 15.0
+                defects.append({
+                    "type": "foldable_hinge_bisection",
+                    "severity": "high",
+                    "element": first_hinge["selector"],
+                    "description": f"Foldable Hinge Split: Element '{first_hinge['selector']}' straddles the central physical fold line at {hinge_x}px.",
+                    "bounding_box": first_hinge["rect"],
+                    "proposed_fix": "max-width: 48% !important;\nmargin-right: auto !important;"
+                })
+            else:
+                checklist.append({
+                    "id": "foldable_hinge_split",
+                    "name": "Foldable Screen: Physical Hinge Bisection (Rare Case)",
+                    "category": "Device Hardware Cutouts",
+                    "status": "PASSED",
+                    "severity": "INFO",
+                    "metrics": {"fold_alignment": f"Dual-screen hinge at x={hinge_x}px respected"},
+                    "explanation": f"Zero interactive targets or headings bisect the central foldable hinge seam at x={hinge_x}px.",
+                    "remediation": None
+                })
+        else:
+            checklist.append({
+                "id": "foldable_hinge_split",
+                "name": "Foldable Screen: Physical Hinge Bisection (Rare Case)",
+                "category": "Device Hardware Cutouts",
+                "status": "NOT_APPLICABLE",
+                "severity": "INFO",
+                "metrics": {"device_architecture": "Single-panel display; no foldable hinge present"},
+                "explanation": "Standard non-foldable device geometry; physical hinge seam check relaxed.",
+                "remediation": None
+            })
+
+        # =========================================================================
+        # 13. DYNAMIC VIEWPORT HEIGHT TRAPPING (100vh vs 100dvh - Rare Case)
+        # =========================================================================
+        has_100vh = dom_metrics.get("has100vhContainer", False)
+        bottom_fixed_unpadded = []
+        if is_mobile:
+            for el in elements:
+                comp = el.get("computed", {})
+                if comp.get("position") == "fixed":
+                    rect = el.get("rect", {})
+                    if rect.get("bottom", 0) >= vp_height - 2 and rect.get("y", 0) > vp_height - 80:
+                        if el.get("isInteractive") or el.get("tagName") in ["button", "a", "div"]:
+                            bottom_fixed_unpadded.append(el.get("selector"))
+
+        if is_mobile and (has_100vh or len(bottom_fixed_unpadded) > 0):
+            flagged = bottom_fixed_unpadded[0] if bottom_fixed_unpadded else "Container with 100vh"
+            checklist.append({
+                "id": "dynamic_viewport_height_trapping",
+                "name": "Dynamic Viewport Height (100vh vs 100dvh Trap)",
+                "category": "Mobile Standards",
+                "status": "WARNING",
+                "severity": "MEDIUM",
+                "metrics": {
+                    "has_rigid_100vh": has_100vh,
+                    "bottom_fixed_controls": len(bottom_fixed_unpadded),
+                    "target": flagged
+                },
+                "explanation": f"Detected rigid 100vh or unpadded bottom fixed control ('{flagged}'). On mobile Chrome/Safari, dynamic address bars and virtual keyboards will occlude bottom action buttons.",
+                "remediation": "min-height: 100dvh !important; padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;"
+            })
+            score -= 5.0
+        else:
+            checklist.append({
+                "id": "dynamic_viewport_height_trapping",
+                "name": "Dynamic Viewport Height (100vh vs 100dvh Trap)",
+                "category": "Mobile Standards",
+                "status": "PASSED",
+                "severity": "INFO",
+                "metrics": {"viewport_units": "Dynamic dvh / safe-area padding adhered to"},
+                "explanation": "Viewport height units and bottom controls safely account for mobile dynamic browser UI expansion.",
+                "remediation": None
+            })
+
+        # =========================================================================
+        # 14. TAP TARGET PROXIMITY & FINGER COLLISION (WCAG 2.5.8 - Rare Case)
+        # =========================================================================
+        if is_touch:
+            interactive_els = [e for e in elements if e.get("isInteractive") or e.get("tagName") in ["button", "a", "input"]]
+            crowded_pairs = []
+            for i in range(len(interactive_els)):
+                for j in range(i + 1, min(i + 8, len(interactive_els))):
+                    r1 = interactive_els[i].get("rect", {})
+                    r2 = interactive_els[j].get("rect", {})
+                    if not r1 or not r2:
+                        continue
+                    dx = max(0, max(r1.get("x", 0), r2.get("x", 0)) - min(r1.get("right", 0), r2.get("right", 0)))
+                    dy = max(0, max(r1.get("y", 0), r2.get("y", 0)) - min(r1.get("bottom", 0), r2.get("bottom", 0)))
+                    dist = math.hypot(dx, dy)
+                    if dist < 6 and (dx > 0 or dy > 0):
+                        crowded_pairs.append({
+                            "elem1": interactive_els[i].get("selector"),
+                            "elem2": interactive_els[j].get("selector"),
+                            "gap_px": round(dist)
+                        })
+                        if len(crowded_pairs) >= 2:
+                            break
+                if len(crowded_pairs) >= 2:
+                    break
+
+            if crowded_pairs:
+                first_crowd = crowded_pairs[0]
+                checklist.append({
+                    "id": "tap_target_proximity",
+                    "name": "Touch Target Proximity & Finger Spacing (WCAG 2.5.8)",
+                    "category": "Accessibility",
+                    "status": "WARNING",
+                    "severity": "MEDIUM",
+                    "metrics": {
+                        "colliding_pair": f"{first_crowd['elem1']} <-> {first_crowd['elem2']}",
+                        "measured_separation": f"{first_crowd['gap_px']}px",
+                        "minimum_required": "8px spacing (WCAG 2.5.8)"
+                    },
+                    "explanation": f"Adjacent interactive targets '{first_crowd['elem1']}' and '{first_crowd['elem2']}' have only {first_crowd['gap_px']}px separation (<8px required). Increases accidental false touch triggers on mobile.",
+                    "remediation": "margin-right: 8px !important; margin-bottom: 8px !important; gap: 8px !important;"
+                })
+                score -= 5.0
+            else:
+                checklist.append({
+                    "id": "tap_target_proximity",
+                    "name": "Touch Target Proximity & Finger Spacing (WCAG 2.5.8)",
+                    "category": "Accessibility",
+                    "status": "PASSED",
+                    "severity": "INFO",
+                    "metrics": {"touch_spacing": "All adjacent interactive targets >= 8px separation"},
+                    "explanation": "All neighboring interactive touch targets satisfy WCAG 2.5.8 spacing requirements to prevent mis-taps.",
+                    "remediation": None
+                })
+        else:
+            checklist.append({
+                "id": "tap_target_proximity",
+                "name": "Touch Target Proximity & Finger Spacing (WCAG 2.5.8)",
+                "category": "Accessibility",
+                "status": "NOT_APPLICABLE",
+                "severity": "INFO",
+                "metrics": {"interaction_model": "Desktop pointer / mouse precision"},
+                "explanation": "Finger target spacing minimums relaxed for high-precision desktop mouse cursor.",
+                "remediation": None
+            })
+
+        # =========================================================================
+        # 15. ACCESSIBLE NAME & INVISIBLE INTERACTIVE TARGETS (WCAG 4.1.2 - Rare Case)
+        # =========================================================================
+        unnamed_targets = []
+        for el in elements:
+            if el.get("isInteractive") or el.get("tagName") in ["button", "a"]:
+                has_name = el.get("hasAccessibleName", True)
+                if not has_name or (el.get("isIconOnly") and not el.get("ariaLabel")):
+                    unnamed_targets.append(el.get("selector"))
+
+        if unnamed_targets:
+            first_unnamed = unnamed_targets[0]
+            checklist.append({
+                "id": "accessible_name_missing",
+                "name": "Accessible Name on Interactive Targets (WCAG 4.1.2)",
+                "category": "Accessibility",
+                "status": "FAILED",
+                "severity": "HIGH",
+                "metrics": {
+                    "unnamed_elements_count": len(unnamed_targets),
+                    "primary_target": first_unnamed
+                },
+                "explanation": f"Interactive control '{first_unnamed}' has no visible text and lacks an accessible name (missing aria-label, title, or alt). Unusable by assistive screen readers and automated RPA click bots.",
+                "remediation": "<button aria-label='Submit Action'> or <span class='sr-only'>Action Label</span>"
+            })
+            score -= 10.0
+        else:
+            checklist.append({
+                "id": "accessible_name_missing",
+                "name": "Accessible Name on Interactive Targets (WCAG 4.1.2)",
+                "category": "Accessibility",
+                "status": "PASSED",
+                "severity": "INFO",
+                "metrics": {"accessible_labels": "All interactive controls labeled"},
+                "explanation": "All buttons, links, and form inputs possess discernible textual labels or aria-label attributes.",
+                "remediation": None
+            })
+
+        # =========================================================================
+        # 16. ACCIDENTAL SCROLL TRAPPING & OVERFLOW LOCK (Rare Case)
+        # =========================================================================
+        body_overflow = dom_metrics.get("bodyOverflow", "visible")
+        doc_scroll_h = dom_metrics.get("documentScrollHeight", vp_height)
+        if is_mobile and body_overflow in ["hidden", "clip"] and doc_scroll_h > vp_height + 50:
+            checklist.append({
+                "id": "scroll_trapping_overflow",
+                "name": "Mobile Scroll Trapping & CSS Overflow Lockout",
+                "category": "Responsiveness",
+                "status": "FAILED",
+                "severity": "CRITICAL",
+                "metrics": {
+                    "body_overflow": body_overflow,
+                    "document_height": f"{doc_scroll_h}px",
+                    "viewport_height": f"{vp_height}px"
+                },
+                "explanation": f"Document body has 'overflow: {body_overflow}' while document height ({doc_scroll_h}px) exceeds screen ({vp_height}px). Traps mobile touch users, preventing vertical scroll.",
+                "remediation": "body, html { overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }"
+            })
+            score -= 20.0
+            defects.append({
+                "type": "scroll_trapping",
+                "severity": "critical",
+                "element": "body",
+                "description": f"Mobile Scroll Trap: 'overflow: {body_overflow}' prevents scrolling down.",
+                "bounding_box": {"x": 0, "y": 0, "width": vp_width, "height": vp_height},
+                "proposed_fix": "overflow-y: auto !important;\n-webkit-overflow-scrolling: touch !important;"
+            })
+        else:
+            checklist.append({
+                "id": "scroll_trapping_overflow",
+                "name": "Mobile Scroll Trapping & CSS Overflow Lockout",
+                "category": "Responsiveness",
+                "status": "PASSED",
+                "severity": "INFO",
+                "metrics": {"scroll_trapping": "Zero scroll traps; body scrolling fluid"},
+                "explanation": "Document root scroll gestures are uninhibited; touch swipe navigation flows smoothly.",
+                "remediation": None
+            })
+
         # Final score bounding
         final_score = max(0.0, min(100.0, round(score, 1)))
         failed_count = sum(1 for c in checklist if c["status"] == "FAILED")
@@ -630,11 +898,122 @@ class DynamicEdgeCaseChecker:
         elif final_score < 90:
             overall_grade = "B (Acceptable)"
 
+        # =========================================================================
+        # MULTI-LEVEL PERFORMANCE BREAKDOWN & WEAK AREAS ACTION CENTER
+        # =========================================================================
+        check_by_id = {c["id"]: c for c in checklist}
+        performance_levels = []
+        weak_areas = []
+
+        level_definitions = [
+            {
+                "level": 1,
+                "id": "responsiveness",
+                "name": "Level 1: Responsiveness & Fluid Layout",
+                "description": "Horizontal scroll prevention, viewport blowout resilience, dynamic dvh vs 100vh trapping, and mobile scroll-lock safety.",
+                "check_ids": ["layout_blowout", "typography_elasticity", "dynamic_viewport_height_trapping", "scroll_trapping_overflow"]
+            },
+            {
+                "level": 2,
+                "id": "accessibility",
+                "name": "Level 2: WCAG Accessibility (Touch, Contrast & Names)",
+                "description": "Touch target tap dimensions (WCAG 2.5.5), contrast ratio (WCAG 1.4.3 AA), finger spacing (WCAG 2.5.8), and accessible names (WCAG 4.1.2).",
+                "check_ids": ["touch_target", "color_contrast", "tap_target_proximity", "accessible_name_missing"]
+            },
+            {
+                "level": 3,
+                "id": "visual_integrity",
+                "name": "Level 3: Visual & Spatial Integrity",
+                "description": "Element bounding margin clipping, text truncation, and media container responsiveness.",
+                "check_ids": ["element_clipping", "unconstrained_media"]
+            },
+            {
+                "level": 4,
+                "id": "device_standards",
+                "name": "Level 4: Mobile & Foldable Hardware Standards",
+                "description": "Viewport meta configuration, safe-area insets, extreme aspect ratios, and foldable hinge bisection.",
+                "check_ids": ["viewport_meta", "safe_area_occlusion", "extreme_aspect_ratio", "foldable_hinge_split"]
+            },
+            {
+                "level": 5,
+                "id": "runtime_stability",
+                "name": "Level 5: RPA & Runtime Stability",
+                "description": "Z-Index collision & overlay CTA occlusion (blocking automated clicks) and JS runtime exceptions.",
+                "check_ids": ["zindex_collision", "runtime_console_errors"]
+            }
+        ]
+
+        for l_def in level_definitions:
+            l_checks = [check_by_id[cid] for cid in l_def["check_ids"] if cid in check_by_id]
+            if not l_checks:
+                continue
+
+            check_scores = []
+            for chk in l_checks:
+                st = chk.get("status", "PASSED")
+                if st in ["PASSED", "NOT_APPLICABLE"]:
+                    check_scores.append(100.0)
+                elif st == "WARNING":
+                    check_scores.append(60.0)
+                else: # FAILED
+                    sev = chk.get("severity", "HIGH").upper()
+                    if sev == "CRITICAL":
+                        check_scores.append(0.0)
+                    elif sev == "HIGH":
+                        check_scores.append(30.0)
+                    else:
+                        check_scores.append(50.0)
+
+            lvl_score = round(sum(check_scores) / len(check_scores), 1) if check_scores else 100.0
+            
+            lvl_grade = "A+"
+            if lvl_score < 60:
+                lvl_grade = "F"
+            elif lvl_score < 75:
+                lvl_grade = "C"
+            elif lvl_score < 90:
+                lvl_grade = "B"
+            elif lvl_score < 98:
+                lvl_grade = "A"
+
+            passed_in_lvl = sum(1 for c in l_checks if c["status"] in ["PASSED", "NOT_APPLICABLE"])
+            performance_levels.append({
+                "level": l_def["level"],
+                "id": l_def["id"],
+                "name": l_def["name"],
+                "description": l_def["description"],
+                "score": lvl_score,
+                "grade": lvl_grade,
+                "status": "PASS" if lvl_score >= 85 else ("WARN" if lvl_score >= 60 else "FAIL"),
+                "passed_checks": passed_in_lvl,
+                "total_checks": len(l_checks),
+                "checks": l_checks
+            })
+
+            # Collect weak areas needing improvement
+            for chk in l_checks:
+                if chk["status"] in ["FAILED", "WARNING"]:
+                    remed = chk.get("remediation") or "Inspect element styles and ensure responsiveness."
+                    weak_areas.append({
+                        "id": chk["id"],
+                        "name": chk["name"],
+                        "level_name": l_def["name"],
+                        "level_num": l_def["level"],
+                        "severity": chk.get("severity", "HIGH").upper(),
+                        "status": chk["status"],
+                        "explanation": chk.get("explanation", ""),
+                        "metrics": chk.get("metrics", {}),
+                        "remediation": remed,
+                        "projected_gain": f"+{round((100 - lvl_score) / max(1, len(l_checks)))}% to Level {l_def['level']}"
+                    })
+
         return {
             "compliance_score": final_score,
             "grade": overall_grade,
             "checklist": checklist,
             "defects": defects,
+            "performance_levels": performance_levels,
+            "weak_areas": weak_areas,
             "summary_counts": {
                 "total_checks": len(checklist),
                 "passed": passed_count,

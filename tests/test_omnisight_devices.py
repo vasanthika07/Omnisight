@@ -62,8 +62,8 @@ class TestOmniSightAnyDevice(unittest.TestCase):
         self.assertEqual(device_config["orientation"], "landscape")
         self.assertEqual(device_config["category"], "custom")
 
-    def test_03_eleven_dynamic_edge_cases_evaluation(self):
-        """Verifies evaluation of all 11 universal edge cases on mobile."""
+    def test_03_sixteen_dynamic_edge_and_rare_cases_evaluation(self):
+        """Verifies evaluation of all 16 universal edge and rare cases on mobile."""
         device_config = get_device_by_id("iphone_15_pro")
         mock_dom = {
             "documentScrollWidth": 520,
@@ -86,20 +86,34 @@ class TestOmniSightAnyDevice(unittest.TestCase):
         self.assertIsNotNone(report)
         self.assertIn("compliance_score", report)
         self.assertIn("grade", report)
-        self.assertEqual(len(report["checklist"]), 11, "Should evaluate all 11 universal edge cases")
+        self.assertIn("performance_levels", report)
+        self.assertIn("weak_areas", report)
+        self.assertEqual(len(report["performance_levels"]), 5, "Should evaluate all 5 performance levels")
+        self.assertGreaterEqual(len(report["weak_areas"]), 1, "Should identify at least 1 weak area for blowout")
+        self.assertEqual(len(report["checklist"]), 16, "Should evaluate all 16 universal edge and rare cases")
         
-        # Verify layout blowout defect detected
+        # Verify all 16 check IDs are present
         check_ids = [c["id"] for c in report["checklist"]]
-        self.assertIn("layout_blowout", check_ids)
-        self.assertIn("touch_target", check_ids)
-        self.assertIn("zindex_collision", check_ids)
-        self.assertIn("color_contrast", check_ids)
-        self.assertIn("viewport_meta", check_ids)
-        self.assertIn("typography_elasticity", check_ids)
-        self.assertIn("unconstrained_media", check_ids)
-        self.assertIn("extreme_aspect_ratio", check_ids)
-        self.assertIn("safe_area_occlusion", check_ids)
-        self.assertIn("runtime_console_errors", check_ids)
+        expected_ids = [
+            "layout_blowout",
+            "element_clipping",
+            "touch_target",
+            "zindex_collision",
+            "color_contrast",
+            "viewport_meta",
+            "typography_elasticity",
+            "unconstrained_media",
+            "extreme_aspect_ratio",
+            "safe_area_occlusion",
+            "runtime_console_errors",
+            "foldable_hinge_split",
+            "dynamic_viewport_height_trapping",
+            "tap_target_proximity",
+            "accessible_name_missing",
+            "scroll_trapping_overflow"
+        ]
+        for exp_id in expected_ids:
+            self.assertIn(exp_id, check_ids, f"Expected check '{exp_id}' in checklist")
 
         blowout = next(c for c in report["checklist"] if c["id"] == "layout_blowout")
         self.assertEqual(blowout["status"], "FAILED")
@@ -163,7 +177,7 @@ class TestOmniSightAnyDevice(unittest.TestCase):
         self.assertEqual(res.get("target_url"), "https://example.com")
         self.assertIn("compliance_score", res)
         self.assertIn("grade", res)
-        self.assertEqual(len(res.get("checklist", [])), 11, "All 11 universal edge cases should be evaluated")
+        self.assertEqual(len(res.get("checklist", [])), 16, "All 16 universal edge and rare cases should be evaluated")
         self.assertIsNotNone(res.get("before_screenshot"))
 
         # If defects were found on external site (e.g. small touch targets), verify patch generation
@@ -186,6 +200,43 @@ class TestOmniSightAnyDevice(unittest.TestCase):
         self.assertIn("fleet_compliance_score", res)
         self.assertIn("iphone_15_pro", res.get("fleet_results", {}))
         self.assertIn("ipad_air", res.get("fleet_results", {}))
+
+    def test_08_foldable_device_hinge_bisection_detection(self):
+        """Verifies detection of rare foldable physical hinge seam bisection on dual-screen devices."""
+        foldable_config = get_device_by_id("galaxy_z_fold5_unfolded")
+        self.assertIsNotNone(foldable_config)
+        self.assertEqual(foldable_config["category"], "foldables")
+        hinge_x = foldable_config["width"] // 2  # 816 // 2 = 408
+
+        # Mock DOM with a CTA that directly bisects the central hinge
+        mock_dom = {
+            "documentScrollWidth": foldable_config["width"],
+            "hasHorizontalScrollbar": False,
+            "elements": [
+                {
+                    "tagName": "button",
+                    "selector": "#bisecting-hero-cta",
+                    "text": "Submit Application",
+                    "rect": {"x": 350, "y": 300, "width": 120, "height": 48, "right": 470},
+                    "isInteractive": True,
+                    "hasAccessibleName": True,
+                    "computed": {"fontSize": "16px", "color": "#ffffff", "backgroundColor": "#2563eb"}
+                }
+            ],
+            "overlaps": [],
+            "media_items": [],
+            "meta_info": {"hasViewportMeta": True, "userScalable": True},
+            "console_errors": []
+        }
+        report = self.checker.evaluate(mock_dom, foldable_config)
+        self.assertIsNotNone(report)
+        hinge_chk = next(c for c in report["checklist"] if c["id"] == "foldable_hinge_split")
+        self.assertEqual(hinge_chk["status"], "FAILED")
+        self.assertIn("bisects the physical foldable screen hinge seam", hinge_chk["explanation"])
+        self.assertEqual(hinge_chk["metrics"]["hinge_coordinate"], f"x = {hinge_x}px")
+        # Verify Level 4 incorporates this check
+        lvl4 = next(l for l in report["performance_levels"] if l["level"] == 4)
+        self.assertIn(lvl4["status"], ["FAIL", "WARN"])
 
 if __name__ == "__main__":
     unittest.main()
