@@ -48,7 +48,13 @@ def init_db():
         ("pixel_diff_stats", "TEXT"),
         ("target_url", "TEXT"),
         ("page_title", "TEXT"),
-        ("is_external", "INTEGER")
+        ("is_external", "INTEGER"),
+        ("compliance_score", "REAL"),
+        ("grade", "TEXT"),
+        ("checklist", "TEXT"),
+        ("performance_levels", "TEXT"),
+        ("weak_areas", "TEXT"),
+        ("summary_counts", "TEXT")
     ]:
         if col_name not in existing_cols:
             try:
@@ -103,13 +109,21 @@ def save_audit_run(run_data: Dict[str, Any]) -> str:
     page_title = run_data.get("page_title", "")
     is_external = 1 if run_data.get("is_external") else (1 if target_url and not str(target_url).startswith("file://") and "test-app" not in str(target_url) else 0)
 
+    compliance_score = float(run_data.get("compliance_score", 100.0))
+    grade = run_data.get("grade") or "A+"
+    checklist_json = json.dumps(run_data.get("checklist", []))
+    levels_json = json.dumps(run_data.get("performance_levels", []))
+    weak_areas_json = json.dumps(run_data.get("weak_areas", []))
+    summary_counts_json = json.dumps(run_data.get("summary_counts", {}))
+
     cursor.execute("""
     INSERT OR REPLACE INTO audit_runs (
         id, created_at, status, viewport, before_screenshot, after_screenshot,
         diff_screenshot, defects_found, fix_applied, verification_passed,
         pr_number, pr_url, summary, timeline, crop_screenshot, engine_used, confidence_score,
-        token_telemetry, pixel_diff_stats, target_url, page_title, is_external
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        token_telemetry, pixel_diff_stats, target_url, page_title, is_external,
+        compliance_score, grade, checklist, performance_levels, weak_areas, summary_counts
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         run_data["id"],
         run_data.get("created_at", datetime.now().isoformat()),
@@ -132,7 +146,13 @@ def save_audit_run(run_data: Dict[str, Any]) -> str:
         pixel_stats,
         target_url,
         page_title,
-        is_external
+        is_external,
+        compliance_score,
+        grade,
+        checklist_json,
+        levels_json,
+        weak_areas_json,
+        summary_counts_json
     ))
     
     # Save defects
@@ -205,9 +225,49 @@ def _hydrate_run_dict(cursor, run_row) -> Dict[str, Any]:
     p = cursor.fetchone()
     run_dict["patch"] = dict(p) if p else None
 
+    # Performance Breakdown & 16-Point Checklist
+    try:
+        run_dict["compliance_score"] = float(run_dict["compliance_score"]) if run_dict.get("compliance_score") is not None else 100.0
+    except Exception:
+        run_dict["compliance_score"] = 100.0
+
+    run_dict["grade"] = run_dict.get("grade") or "A+"
+
+    try:
+        run_dict["checklist"] = json.loads(run_dict["checklist"]) if run_dict.get("checklist") else []
+    except Exception:
+        run_dict["checklist"] = []
+
+    try:
+        run_dict["performance_levels"] = json.loads(run_dict["performance_levels"]) if run_dict.get("performance_levels") else []
+    except Exception:
+        run_dict["performance_levels"] = []
+
+    try:
+        run_dict["weak_areas"] = json.loads(run_dict["weak_areas"]) if run_dict.get("weak_areas") else []
+    except Exception:
+        run_dict["weak_areas"] = []
+
+    try:
+        run_dict["summary_counts"] = json.loads(run_dict["summary_counts"]) if run_dict.get("summary_counts") else {}
+    except Exception:
+        run_dict["summary_counts"] = {}
+
     # External website flag
     target_url = run_dict.get("target_url") or ""
     run_dict["is_external"] = bool(run_dict.get("is_external") or (target_url and not str(target_url).startswith("file://") and "test-app" not in str(target_url)))
+
+    # Draft PR payload
+    patch = run_dict.get("patch")
+    run_dict["pr_payload"] = {
+        "title": f"fix(ui): responsive visual QA patch for {run_dict.get('viewport', 'mobile')} ({run_dict['id'][:10]})",
+        "branch": f"omnisight/fix-ui-{run_dict['id'][:12]}",
+        "patch_file": patch.get("file_path") if patch else None,
+        "unified_diff": patch.get("unified_diff") if patch else None,
+        "viewport": run_dict.get("viewport", "mobile"),
+        "defects_resolved": run_dict.get("defects_found", 0)
+    }
+
     return run_dict
 
 def get_recent_runs(limit: int = 20) -> List[Dict[str, Any]]:

@@ -88,18 +88,41 @@ class AgenticOrchestrator:
         defects = analysis.get("defects", [])
         token_telemetry = analysis.get("token_telemetry", {})
         
-        # Evaluate 11 Universal Dynamic Edge Cases (responsiveness, accessibility, spatial clipping)
+        # Evaluate 16 Universal Dynamic Edge & Rare Cases (responsiveness, accessibility, spatial clipping, foldables)
         from backend.devices.edge_case_checker import DynamicEdgeCaseChecker
         from backend.config import VIEWPORTS
-        vp_config = VIEWPORTS.get(viewport_key, VIEWPORTS["mobile"])
-        device_spec = {
-            "name": f"{viewport_key.title()} Viewport",
-            "width": vp_config["width"],
-            "height": vp_config["height"],
-            "is_mobile": viewport_key != "desktop",
-            "has_touch": viewport_key != "desktop",
-            "orientation": "portrait"
-        }
+        from backend.devices.registry import get_device_by_id
+
+        vp_config = VIEWPORTS.get(viewport_key)
+        if vp_config:
+            device_spec = {
+                "name": f"{viewport_key.title()} Viewport",
+                "width": vp_config["width"],
+                "height": vp_config["height"],
+                "is_mobile": viewport_key != "desktop",
+                "has_touch": viewport_key != "desktop",
+                "orientation": "portrait"
+            }
+        else:
+            dev = get_device_by_id(viewport_key)
+            if dev:
+                vp_config = {
+                    "width": dev["width"],
+                    "height": dev["height"],
+                    "dpr": dev.get("dpr", 1.0)
+                }
+                device_spec = dev
+            else:
+                vp_config = VIEWPORTS["mobile"]
+                device_spec = {
+                    "name": f"{viewport_key.title()} Viewport",
+                    "width": vp_config["width"],
+                    "height": vp_config["height"],
+                    "is_mobile": True,
+                    "has_touch": True,
+                    "orientation": "portrait"
+                }
+
         edge_report = DynamicEdgeCaseChecker().evaluate(before_dom, device_spec)
         compliance_score = edge_report.get("compliance_score", 100.0)
         grade = edge_report.get("grade", "A+ (Compliant)")
@@ -115,6 +138,12 @@ class AgenticOrchestrator:
                 existing_elements.add(ed.get("element"))
 
         defects_found = len(defects) > 0
+        summary_counts = {
+            "total_checks": len(checklist),
+            "passed": sum(1 for c in checklist if c.get("status") in ["PASSED", "NOT_APPLICABLE"]),
+            "failed": sum(1 for c in checklist if c.get("status") == "FAILED"),
+            "warning": sum(1 for c in checklist if c.get("status") == "WARNING")
+        }
 
         log_step(
             "defect_detection",
@@ -150,6 +179,7 @@ class AgenticOrchestrator:
                 "checklist": checklist,
                 "performance_levels": performance_levels,
                 "weak_areas": weak_areas,
+                "summary_counts": summary_counts,
                 "dom_metrics": before_dom,
                 "token_telemetry": token_telemetry,
                 "summary": f"No visual defects detected on target page ({viewport_key} viewport). Compliance score: {compliance_score}%.",
@@ -302,6 +332,7 @@ class AgenticOrchestrator:
             "checklist": checklist,
             "performance_levels": performance_levels,
             "weak_areas": weak_areas,
+            "summary_counts": summary_counts,
             "dom_metrics": before_dom,
             "token_telemetry": token_telemetry,
             "summary": (
@@ -388,6 +419,12 @@ class AgenticOrchestrator:
             "checklist": mobile_run.get("checklist", []),
             "performance_levels": mobile_run.get("performance_levels", []),
             "weak_areas": mobile_run.get("weak_areas", []),
+            "summary_counts": mobile_run.get("summary_counts", {
+                "total_checks": len(mobile_run.get("checklist", [])),
+                "passed": sum(1 for c in mobile_run.get("checklist", []) if c.get("status") in ["PASSED", "NOT_APPLICABLE"]),
+                "failed": sum(1 for c in mobile_run.get("checklist", []) if c.get("status") == "FAILED"),
+                "warning": sum(1 for c in mobile_run.get("checklist", []) if c.get("status") == "WARNING")
+            }),
             "pr_payload": mobile_run.get("pr_payload") or {
                 "title": f"fix(ui): responsive matrix alignment across viewports ({matrix_id[:12]})",
                 "branch": f"omnisight/fix-matrix-{matrix_id[:12]}",

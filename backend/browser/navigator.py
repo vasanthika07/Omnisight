@@ -75,7 +75,18 @@ class BrowserNavigator:
         Navigates to the page at the given viewport, extracts DOM metrics, and saves screenshot.
         """
         url = self.normalize_url(target_url)
-        vp_config = VIEWPORTS.get(viewport_key, VIEWPORTS["mobile"])
+        vp_config = VIEWPORTS.get(viewport_key)
+        if vp_config is None:
+            from backend.devices.registry import get_device_by_id
+            dev = get_device_by_id(viewport_key)
+            if dev:
+                vp_config = {
+                    "width": dev["width"],
+                    "height": dev["height"],
+                    "dpr": dev.get("dpr", 1.0)
+                }
+            else:
+                vp_config = VIEWPORTS["mobile"]
         
         screenshot_filename = f"{run_id}_{viewport_key}{suffix}.png"
         screenshot_path = SCREENSHOTS_DIR / screenshot_filename
@@ -137,7 +148,18 @@ class BrowserNavigator:
         Applies a candidate CSS patch in real-time inside the browser DOM and captures the after-state.
         """
         url = self.normalize_url(target_url)
-        vp_config = VIEWPORTS.get(viewport_key, VIEWPORTS["mobile"])
+        vp_config = VIEWPORTS.get(viewport_key)
+        if vp_config is None:
+            from backend.devices.registry import get_device_by_id
+            dev = get_device_by_id(viewport_key)
+            if dev:
+                vp_config = {
+                    "width": dev["width"],
+                    "height": dev["height"],
+                    "dpr": dev.get("dpr", 1.0)
+                }
+            else:
+                vp_config = VIEWPORTS["mobile"]
         
         after_filename = f"{run_id}_{viewport_key}_after.png"
         after_path = SCREENSHOTS_DIR / after_filename

@@ -146,6 +146,75 @@ def audit_any_device(req: DeviceAuditRequest):
 
         status_val = "repaired" if verification_passed and len(defects) > 0 else ("passed" if len(defects) == 0 else "action_required")
 
+        # Construct structured execution timeline
+        timeline = [
+            {
+                "step": "plan",
+                "message": f"Configured device emulation: {device_config.get('name')} ({device_config.get('width')}×{device_config.get('height')}, DPR: {device_config.get('dpr', 1.0)})",
+                "status": "completed",
+                "timestamp": time.time()
+            },
+            {
+                "step": "browse",
+                "message": f"Navigated to target and captured initial DOM state: {before_screenshot}",
+                "status": "completed",
+                "timestamp": time.time()
+            },
+            {
+                "step": "edge_radar",
+                "message": f"Audited 16-point dynamic edge & rare case radar: {score}% score ({grade})",
+                "status": "completed" if score >= 80 else "warning",
+                "timestamp": time.time()
+            },
+            {
+                "step": "defect_detection",
+                "message": f"Identified {len(defects)} anomaly/anomalies violating responsive standards.",
+                "status": "completed" if len(defects) == 0 else "warning",
+                "timestamp": time.time()
+            }
+        ]
+
+        if req.auto_heal and len(defects) > 0:
+            timeline.append({
+                "step": "synthesize_patch",
+                "message": f"Synthesized candidate responsive CSS patch for {defects[0].get('type')}",
+                "status": "completed",
+                "timestamp": time.time()
+            })
+            timeline.append({
+                "step": "execute_fix",
+                "message": f"Injected candidate patch into device DOM sandbox: {patch_css.splitlines()[0] if patch_info else ''}",
+                "status": "completed",
+                "timestamp": time.time()
+            })
+            timeline.append({
+                "step": "verification",
+                "message": f"Verification {'Passed' if verification_passed else 'Failed'}: Re-audited device geometry.",
+                "status": "success" if verification_passed else "warning",
+                "timestamp": time.time()
+            })
+            if diff_screenshot:
+                timeline.append({
+                    "step": "visual_diff",
+                    "message": f"Generated pixel discrepancy heatmap: {diff_screenshot} ({pixel_stats.get('diff_percentage', 0)}% diff)",
+                    "status": "completed",
+                    "timestamp": time.time()
+                })
+
+        timeline.append({
+            "step": "complete",
+            "message": f"OmniSight device audit finished with status: {status_val.upper()}",
+            "status": "completed",
+            "timestamp": time.time()
+        })
+
+        summary_counts = {
+            "total_checks": len(checklist),
+            "passed": sum(1 for c in checklist if c.get("status") in ["PASSED", "NOT_APPLICABLE"]),
+            "failed": sum(1 for c in checklist if c.get("status") == "FAILED"),
+            "warning": sum(1 for c in checklist if c.get("status") == "WARNING")
+        }
+
         # Build response record
         audit_record = {
             "id": run_id,
@@ -160,6 +229,7 @@ def audit_any_device(req: DeviceAuditRequest):
             "checklist": checklist,
             "performance_levels": capture_res.get("performance_levels", []),
             "weak_areas": capture_res.get("weak_areas", []),
+            "summary_counts": summary_counts,
             "defects_found": len(defects),
             "defects": defects,
             "fix_applied": req.auto_heal and len(defects) > 0,
@@ -169,6 +239,7 @@ def audit_any_device(req: DeviceAuditRequest):
             "diff_screenshot": diff_screenshot,
             "pixel_diff_stats": pixel_stats,
             "patch": patch_info,
+            "timeline": timeline,
             "pr_payload": {
                 "title": f"fix(ui): dynamic edge compliance patch for {device_config.get('name')}",
                 "branch": f"omnisight/fix-device-{run_id}",
@@ -196,7 +267,16 @@ def audit_any_device(req: DeviceAuditRequest):
                 "summary": audit_record["summary"],
                 "patch": patch_info,
                 "target_url": audit_record["target_url"],
-                "page_title": audit_record["page_title"]
+                "page_title": audit_record["page_title"],
+                "is_external": is_external,
+                "compliance_score": score,
+                "grade": grade,
+                "checklist": checklist,
+                "performance_levels": capture_res.get("performance_levels", []),
+                "weak_areas": capture_res.get("weak_areas", []),
+                "summary_counts": summary_counts,
+                "timeline": timeline,
+                "pixel_diff_stats": pixel_stats
             })
         except Exception as e:
             print(f"[OmniSight DB] Record save warning: {e}")
@@ -244,8 +324,12 @@ def audit_multi_device_fleet(req: MultiDeviceAuditRequest):
                 "defects_count": defects_count,
                 "defects": capture["defects"],
                 "screenshot": capture["screenshot_filename"],
+                "performance_levels": capture.get("performance_levels", []),
+                "weak_areas": capture.get("weak_areas", []),
+                "checklist": capture.get("checklist", []),
                 "checklist_summary": {
-                    "passed": sum(1 for c in capture["checklist"] if c["status"] == "PASSED"),
+                    "total": len(capture.get("checklist", [])),
+                    "passed": sum(1 for c in capture["checklist"] if c["status"] in ["PASSED", "NOT_APPLICABLE"]),
                     "failed": sum(1 for c in capture["checklist"] if c["status"] == "FAILED"),
                     "warning": sum(1 for c in capture["checklist"] if c["status"] == "WARNING")
                 }

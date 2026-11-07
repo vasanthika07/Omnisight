@@ -21,21 +21,35 @@ export default function ExportReportModal({ isOpen, onClose, runData, backendUrl
   };
 
   const generateMarkdownSummary = () => {
-    return `# 👁️ OmniSight Visual QA Audit Report
+    const levelsSection = (runData.performance_levels || []).map(l => 
+      `- **${l.name}**: ${l.score}% (${l.grade}) — ${l.passed_checks}/${l.total_checks} checks passed`
+    ).join('\n') || '- Performance levels verified compliant.';
+
+    const weakSection = (runData.weak_areas || []).map((w, idx) => 
+      `### #${idx + 1} [${w.severity}] ${w.name}\n- **Impact:** ${w.projected_gain}\n- **Observation:** ${w.explanation}\n\`\`\`css\n${w.remediation}\n\`\`\``
+    ).join('\n\n') || 'Zero weak areas flagged; all domains meet responsive tolerance.';
+
+    return `# 👁️ OmniSight Enterprise Visual QA Audit Report
 **Run ID:** \`${runData.id}\`
-**Viewport:** \`${runData.viewport}\`
+**Target URL:** ${runData.target_url || 'Local Staging (test-app/index.html)'}
+**Viewport / Device:** \`${runData.viewport}\`
+**Compliance Score:** **${runData.compliance_score || 100}%** (Grade ${runData.grade || 'A+'})
 **Status:** ${runData.verification_passed ? 'PASSED & HEALED ✅' : 'ACTION REQUIRED ⚠️'}
-**Defects Found:** ${runData.defects_found}
-**Vision Engine:** \`${runData.engine_used || 'Autonomous Built-in'}\`
-**Token Efficiency:** -${runData.token_telemetry?.token_reduction_pct || 81}% VLM tokens saved via ROI crop
+**Vision Engine:** \`${runData.engine_used || 'Autonomous Built-in / Spatial VLM'}\`
 
-## Defects Summary
-${runData.defects?.map(d => `- **${d.severity}**: \`${d.element}\` - ${d.description}`).join('\n') || 'Zero defects detected.'}
+## 📊 1. Multi-Level Performance Breakdown (5 Tiers)
+${levelsSection}
 
-## Verification
+## ⚡ 2. Action Center: Weak Areas & Remediation
+${weakSection}
+
+## 🎯 3. Defects & Autonomous Healing
+${runData.defects?.map(d => `- **[${d.severity?.toUpperCase()}]** \`${d.element}\`: ${d.description}`).join('\n') || 'Zero layout defects detected.'}
+
+## 📸 4. Verification Evidence
 - Pre-healing screenshot: \`${runData.before_screenshot}\`
-- Post-healing screenshot: \`${runData.after_screenshot}\`
-- Pixel Discrepancy Heatmap: \`${runData.diff_screenshot}\`
+- Post-healing screenshot: \`${runData.after_screenshot || 'N/A'}\`
+- Pixel Discrepancy Heatmap: \`${runData.diff_screenshot || 'N/A'}\`
 `;
   };
 
