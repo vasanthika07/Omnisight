@@ -24,11 +24,44 @@ export default function App() {
   const [analytics, setAnalytics] = useState(null);
   const [stagingHealth, setStagingHealth] = useState('Compliant');
   
+  // Backend Live Health State
+  const [healthData, setHealthData] = useState(null);
+  const [latency, setLatency] = useState(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const [isBackendOffline, setIsBackendOffline] = useState(false);
+
   // Modals
   const [isPRModalOpen, setIsPRModalOpen] = useState(false);
   const [isCIModalOpen, setIsCIModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [bannerNotice, setBannerNotice] = useState(null);
+
+  const checkHealth = async () => {
+    setIsCheckingHealth(true);
+    const start = performance.now();
+    try {
+      const res = await fetch(`${BACKEND_URL}/health`);
+      if (res.ok) {
+        const data = await res.json();
+        setLatency(Math.round(performance.now() - start));
+        setHealthData(data);
+        setIsBackendOffline(false);
+        if (data.vlm_provider) {
+          setEngineInfo(`VLM: ${data.vlm_provider.toUpperCase()}`);
+        }
+      } else {
+        setHealthData(null);
+        setIsBackendOffline(true);
+        setLatency(null);
+      }
+    } catch (e) {
+      setHealthData(null);
+      setIsBackendOffline(true);
+      setLatency(null);
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
@@ -53,17 +86,19 @@ export default function App() {
     }
   };
 
-  // Load system info, analytics, and history on mount
+  // Load system info, analytics, history, and health on mount + periodic heartbeat
   useEffect(() => {
-    fetch(`${BACKEND_URL}/`)
-      .then((res) => res.json())
-      .then((data) => {
-        setEngineInfo(`VLM: ${data.vlm_provider_configured.toUpperCase()}`);
-      })
-      .catch(() => setEngineInfo('VLM: Autonomous Spatial Engine'));
-
+    checkHealth();
     fetchHistory();
     fetchAnalytics();
+
+    // Heartbeat every 20 seconds
+    const interval = setInterval(() => {
+      checkHealth();
+      fetchAnalytics();
+    }, 20000);
+
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -216,12 +251,49 @@ export default function App() {
         onOpenReportModal={() => setIsReportModalOpen(true)}
         hasRunData={Boolean(currentRun)}
         historyCount={history.length}
+        backendUrl={BACKEND_URL}
+        healthData={healthData}
+        latency={latency}
+        isCheckingHealth={isCheckingHealth}
+        onRefreshHealth={checkHealth}
       />
 
       <MetricsBar 
         analytics={analytics} 
         stagingStatus={stagingHealth} 
       />
+
+      {isBackendOffline && (
+        <div style={{
+          background: 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)',
+          color: '#ffffff',
+          padding: '10px 24px',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
+        }}>
+          <span>⚠️ Backend connection unreachable at {BACKEND_URL}. Live visual audits and Playwright captures are paused.</span>
+          <button 
+            onClick={checkHealth}
+            style={{
+              background: 'rgba(255, 255, 255, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.4)',
+              borderRadius: '6px',
+              color: '#ffffff',
+              padding: '3px 10px',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 700
+            }}
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
 
       {bannerNotice && (
         <div style={{
@@ -300,6 +372,17 @@ export default function App() {
           />
           <Route 
             path="/history" 
+            element={
+              <HistoryView 
+                history={history}
+                setCurrentRun={setCurrentRun}
+                backendUrl={BACKEND_URL}
+                onOpenReportModal={() => setIsReportModalOpen(true)}
+              />
+            } 
+          />
+          <Route 
+            path="/history/:runId" 
             element={
               <HistoryView 
                 history={history}

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from datetime import datetime
 
 from backend.config import (
     SCREENSHOTS_DIR,
@@ -61,10 +62,31 @@ def root():
 
 @app.get("/health")
 def health_check():
+    from backend.storage.db import get_connection
+    total_runs = 0
+    db_status = "connected"
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM audit_runs")
+        row = cur.fetchone()
+        total_runs = row[0] if row else 0
+        conn.close()
+    except Exception:
+        db_status = "degraded"
+
+    vlm = "openai" if OPENAI_API_KEY else ("gemini" if GEMINI_API_KEY else "autonomous_builtin")
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "degraded",
         "playwright": "ready",
-        "vision_engine": "active"
+        "vision_engine": "active",
+        "vlm_provider": vlm,
+        "database": {
+            "status": db_status,
+            "total_runs": total_runs
+        },
+        "server_time": datetime.now().isoformat()
     }
 
 if __name__ == "__main__":

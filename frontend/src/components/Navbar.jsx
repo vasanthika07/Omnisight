@@ -1,6 +1,19 @@
-import React from 'react';
-import { Eye, RefreshCw, Play, GitBranch, FileText, Globe, ShoppingCart, History, Smartphone } from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  Eye, 
+  RefreshCw, 
+  Play, 
+  GitBranch, 
+  FileText, 
+  Globe, 
+  ShoppingCart, 
+  History, 
+  Smartphone,
+  Server,
+  Activity
+} from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import BackendHealthModal from './BackendHealthModal';
 
 export default function Navbar({ 
   onResetBug, 
@@ -10,123 +23,175 @@ export default function Navbar({
   onOpenCIModal, 
   onOpenReportModal,
   hasRunData,
-  historyCount
+  historyCount,
+  backendUrl = 'http://127.0.0.1:8000',
+  healthData,
+  latency,
+  isCheckingHealth,
+  onRefreshHealth
 }) {
+  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
+
+  const isHealthy = healthData?.status === 'healthy';
+  const isDegraded = healthData?.status === 'degraded';
+  const isOffline = !healthData;
+
+  const getStatusText = () => {
+    if (isOffline) return 'Backend: Offline';
+    if (latency !== null) {
+      return `Online • ${latency}ms`;
+    }
+    return engineInfo || 'VLM Engine: Active';
+  };
+
   return (
-    <header className="top-nav">
-      <div className="nav-brand">
-        <div className="brand-icon-box">
-          <Eye size={24} color="#ffffff" />
-        </div>
-        <div className="brand-titles">
-          <h1>OmniSight</h1>
-          <span className="tagline">Multimodal UI Self-Healing & Autonomous RPA QA</span>
-        </div>
-      </div>
-
-      {/* Navigation Routes */}
-      <nav className="nav-routes" aria-label="Main Navigation">
-        <NavLink 
-          to="/" 
-          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-          id="nav-link-devices"
-          title="Universal Any-Device Testing & Dynamic Continuous Monitor"
-          end
-        >
-          <Smartphone size={15} />
-          <span>Any-Device Lab & Monitor</span>
-          <span className="nav-link-badge live">Universal</span>
-        </NavLink>
-
-        <NavLink 
-          to="/external" 
-          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-          id="nav-link-external"
-          title="Universal Scanner: Take any website from external sources to audit"
-        >
-          <Globe size={15} />
-          <span>External Scanner</span>
-          <span className="nav-link-badge live">Live</span>
-        </NavLink>
-
-        <NavLink 
-          to="/staging" 
-          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-          id="nav-link-staging"
-          title="Internal Staging Demo Store & Chaos Anomaly Studio"
-        >
-          <ShoppingCart size={15} />
-          <span>Staging Store</span>
-        </NavLink>
-
-        <NavLink 
-          to="/history" 
-          className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-          id="nav-link-history"
-          title="View all past audit runs and verification records"
-        >
-          <History size={15} />
-          <span>History</span>
-          {typeof historyCount === 'number' && historyCount > 0 && (
-            <span className="nav-link-badge">{historyCount}</span>
-          )}
-        </NavLink>
-      </nav>
-
-      <div className="nav-controls">
-        <div className="status-badge">
-          <span className="pulse-dot"></span>
-          <span>{engineInfo || 'VLM Engine: Active'}</span>
+    <>
+      <header className="top-nav">
+        <div className="nav-brand">
+          <div className="brand-icon-box">
+            <Eye size={24} color="#ffffff" />
+          </div>
+          <div className="brand-titles">
+            <h1>OmniSight</h1>
+            <span className="tagline">Multimodal UI Self-Healing & Autonomous RPA QA</span>
+          </div>
         </div>
 
-        <button 
-          className="btn btn-secondary nav-action-btn"
-          onClick={onOpenCIModal}
-          title="CI/CD Gateway & Automated Webhook Simulator"
-        >
-          <GitBranch size={15} color="#06b6d4" />
-          <span>CI/CD Gateway</span>
-        </button>
+        {/* Navigation Routes */}
+        <nav className="nav-routes" aria-label="Main Navigation">
+          <NavLink 
+            to="/" 
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            id="nav-link-devices"
+            title="Universal Any-Device Testing & Dynamic Continuous Monitor"
+            end
+          >
+            <Smartphone size={15} />
+            <span>Any-Device Lab & Monitor</span>
+            <span className="nav-link-badge live">Universal</span>
+          </NavLink>
 
-        {hasRunData && (
+          <NavLink 
+            to="/external" 
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            id="nav-link-external"
+            title="Universal Scanner: Take any website from external sources to audit"
+          >
+            <Globe size={15} />
+            <span>External Scanner</span>
+            <span className="nav-link-badge live">Live</span>
+          </NavLink>
+
+          <NavLink 
+            to="/staging" 
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            id="nav-link-staging"
+            title="Internal Staging Demo Store & Chaos Anomaly Studio"
+          >
+            <ShoppingCart size={15} />
+            <span>Staging Store</span>
+          </NavLink>
+
+          <NavLink 
+            to="/history" 
+            className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+            id="nav-link-history"
+            title="View all past audit runs and verification records"
+          >
+            <History size={15} />
+            <span>History</span>
+            {typeof historyCount === 'number' && historyCount > 0 && (
+              <span className="nav-link-badge">{historyCount}</span>
+            )}
+          </NavLink>
+        </nav>
+
+        <div className="nav-controls">
+          {/* Live Backend Connection & Health Status Badge */}
+          <button 
+            type="button"
+            className="status-badge"
+            style={{ 
+              cursor: 'pointer',
+              background: isHealthy ? 'rgba(16, 185, 129, 0.12)' : (isDegraded ? 'rgba(245, 158, 11, 0.12)' : 'rgba(239, 68, 68, 0.15)'),
+              borderColor: isHealthy ? 'rgba(16, 185, 129, 0.3)' : (isDegraded ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)'),
+              color: isHealthy ? '#34d399' : (isDegraded ? '#fbbf24' : '#f87171'),
+              borderWidth: '1px',
+              borderStyle: 'solid'
+            }}
+            onClick={() => setIsHealthModalOpen(true)}
+            title="Click to view detailed Backend Health, Latency, and Playwright Diagnostics"
+          >
+            <span 
+              className="pulse-dot" 
+              style={{ 
+                background: isHealthy ? '#10b981' : (isDegraded ? '#f59e0b' : '#ef4444'),
+                boxShadow: isHealthy ? '0 0 10px #10b981' : (isDegraded ? '0 0 10px #f59e0b' : '0 0 10px #ef4444')
+              }}
+            ></span>
+            <span>{getStatusText()}</span>
+          </button>
+
           <button 
             className="btn btn-secondary nav-action-btn"
-            onClick={onOpenReportModal}
-            title="Export Executive Visual QA Report"
+            onClick={onOpenCIModal}
+            title="CI/CD Gateway & Automated Webhook Simulator"
           >
-            <FileText size={15} color="#a855f7" />
-            <span>Export Report</span>
+            <GitBranch size={15} color="#06b6d4" />
+            <span>CI/CD Gateway</span>
           </button>
-        )}
 
-        <button 
-          className="btn btn-secondary" 
-          onClick={onResetBug}
-          disabled={isRunning}
-          title="Reset the checkout page back to intentional bug for testing"
-        >
-          <RefreshCw size={15} className={isRunning ? 'spin' : ''} />
-          <span>Reset Bug</span>
-        </button>
-
-        <button 
-          className="btn btn-primary" 
-          onClick={onTriggerAudit}
-          disabled={isRunning}
-        >
-          {isRunning ? (
-            <>
-              <div className="spinner"></div>
-              <span>Self-Healing In Progress...</span>
-            </>
-          ) : (
-            <>
-              <Play size={15} fill="currentColor" />
-              <span>Run Autonomous Audit</span>
-            </>
+          {hasRunData && (
+            <button 
+              className="btn btn-secondary nav-action-btn"
+              onClick={onOpenReportModal}
+              title="Export Executive Visual QA Report"
+            >
+              <FileText size={15} color="#a855f7" />
+              <span>Export Report</span>
+            </button>
           )}
-        </button>
-      </div>
-    </header>
+
+          <button 
+            className="btn btn-secondary" 
+            onClick={onResetBug}
+            disabled={isRunning}
+            title="Reset the checkout page back to intentional bug for testing"
+          >
+            <RefreshCw size={15} className={isRunning ? 'spin' : ''} />
+            <span>Reset Bug</span>
+          </button>
+
+          <button 
+            className="btn btn-primary" 
+            onClick={onTriggerAudit}
+            disabled={isRunning}
+          >
+            {isRunning ? (
+              <>
+                <div className="spinner"></div>
+                <span>Self-Healing In Progress...</span>
+              </>
+            ) : (
+              <>
+                <Play size={15} fill="currentColor" />
+                <span>Run Autonomous Audit</span>
+              </>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* Backend Health Diagnostics Modal */}
+      <BackendHealthModal 
+        isOpen={isHealthModalOpen}
+        onClose={() => setIsHealthModalOpen(false)}
+        backendUrl={backendUrl}
+        healthData={healthData}
+        latency={latency}
+        isChecking={isCheckingHealth}
+        onRefreshHealth={onRefreshHealth}
+      />
+    </>
   );
 }
